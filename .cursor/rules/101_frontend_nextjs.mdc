@@ -1,0 +1,42 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Frontend Architecture
+
+## Structure
+```
+frontend/
+├── app/
+│   ├── page.tsx         # Main landing page
+│   ├── generate/        # Idea generation flow
+│   └── optimize/        # Video optimization flow
+├── components/
+│   ├── ui/              # ShadCN components
+│   ├── forms/
+│   │   ├── IdeaForm.tsx
+│   │   └── VideoUpload.tsx
+│   ├── results/
+│   │   ├── ContentIdea.tsx
+│   │   └── OptimizationResults.tsx
+│   └── shared/
+│       └── ViralContentCard.tsx
+├── lib/
+│   ├── api-client.ts    # Backend API calls
+│   └── websocket.ts     # Real-time updates
+└── types/
+    └── api.ts           # TypeScript API types
+```
+
+## UI Flow
+1. Landing: Choose "Generate Idea" or "Optimize Video"
+2. Platform Selection: TikTok, Instagram, LinkedIn, Twitter
+3. Input: Text prompt OR video upload
+4. Processing: Real-time WebSocket updates
+5. Results: Structure + captions + hashtags + similar viral content
+
+## Patterns
+• Functional components with hooks only
+• ShadCN for consistent UI components
+• Real-time updates via WebSocket connection
