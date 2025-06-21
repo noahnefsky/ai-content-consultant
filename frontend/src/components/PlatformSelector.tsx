@@ -1,25 +1,25 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { ContentType } from "@/hooks/use-videos";
 
 interface PlatformSelectorProps {
-  selectedPlatforms: string[];
-  onPlatformChange: (platforms: string[]) => void;
+  selectedPlatforms: ContentType[];
+  onPlatformChange: (platforms: ContentType[]) => void;
 }
 
 const platforms = [
-  { id: 'tiktok', name: 'TikTok', color: 'from-pink-500 to-red-500', icon: '🎵' },
-  { id: 'instagram', name: 'Instagram', color: 'from-purple-500 to-pink-500', icon: '📷' },
-  { id: 'linkedin', name: 'LinkedIn', color: 'from-blue-600 to-blue-700', icon: '💼' },
-  { id: 'twitter', name: 'Twitter', color: 'from-blue-400 to-blue-500', icon: '🐦' },
+  { id: 'tiktok' as ContentType, name: 'TikTok', color: 'from-pink-500 to-red-500', icon: '🎵' },
+  { id: 'instagram' as ContentType, name: 'Instagram', color: 'from-purple-500 to-pink-500', icon: '📷' },
+  { id: 'linkedin' as ContentType, name: 'LinkedIn', color: 'from-blue-600 to-blue-700', icon: '💼' },
+  { id: 'twitter' as ContentType, name: 'Twitter', color: 'from-blue-400 to-blue-500', icon: '🐦' },
 ];
 
 export const PlatformSelector = ({ selectedPlatforms, onPlatformChange }: PlatformSelectorProps) => {
   const [isOpen, setIsOpen] = useState(false);
 
-  const togglePlatform = (platformId: string) => {
+  const togglePlatform = (platformId: ContentType) => {
     const updated = selectedPlatforms.includes(platformId)
       ? selectedPlatforms.filter(p => p !== platformId)
       : [...selectedPlatforms, platformId];
