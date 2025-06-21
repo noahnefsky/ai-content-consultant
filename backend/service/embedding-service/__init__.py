@@ -1,0 +1,1 @@
+# AI Content Consultant - Embedding Service 

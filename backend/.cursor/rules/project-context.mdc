@@ -1,0 +1,190 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# AI Content Consultant Backend
+
+## Project Overview
+**Goal**: Help content creators generate viral content using AI analysis of trending posts across social platforms.
+
+**Architecture**: 
+- **N8N Workflow Engine** (main orchestration)
+- **FastAPI API Service** (integration endpoints)
+- **ChromaDB RAG** (one-time populated viral content database)
+- **Google Cloud Run** (API service deployment)
+- **Frontend**: React + Vite + Shadcn/ui (separate service)
+
+## N8N Workflow Integration
+**Reusing Existing N8N Pattern**:
+1. **Chat Trigger** → User input (idea prompt or video upload)
+2. **AI Agent** → Chooses expert based on request type:
+   - **TikTok Expert** → TikTok viral content analysis
+   - **Instagram Expert** → Instagram content optimization  
+   - **Cross-Platform Expert** → Multi-platform adaptation
+3. **Expert Tools** → Each expert queries ChromaDB RAG for viral examples
+4. **Chat Memory** → Maintains user session context
+5. **Response** → Structured content suggestions with hashtags/captions
+
+## Service Architecture
+```
+N8N Workflow (Orchestrator)
+├── FastAPI API Service (N8N webhooks + data management)
+├── ChromaDB RAG Database (populated once locally) ← SIMPLE APPROACH
+├── OpenAI API (content generation)
+└── Expert Agents (platform-specific specialists)
+```
+
+## Core User Flows (N8N Orchestrated)
+1. **Idea Generation**: User prompt → N8N → Expert Agent → ChromaDB query → Content suggestions
+2. **Video Analysis**: Video upload → API Service → N8N → Expert Agent → Optimized content
+3. **Trend Discovery**: N8N → Expert Agents → ChromaDB trending content
+4. **Multi-platform Adaptation**: N8N → Cross-Platform Expert → Platform-specific variations
+
+## Backend Services
+
+### 1. RAG Population (One-Time Local Script)
+**Location**: `backend/service/embedding-service/`
+**Purpose**: Populate ChromaDB with viral content data locally
+**Usage**: Run once to set up the knowledge base
+
+```bash
+cd backend/service/embedding-service
+pip install -r requirements.txt
+python populate_rag.py
+```
+
+**What it creates**:
+- ChromaDB database at `./viral_content_db`
+- Collection: `viral_posts` with 10+ viral posts
+- Embeddings using `all-MiniLM-L6-v2` model
+- Metadata: platform, category, hashtags, engagement metrics
+
+### 2. API Service (N8N Integration)
+**Location**: `backend/service/api-service/`
+**Purpose**: N8N webhook endpoints + data management
+**Key Functions**:
+- N8N webhook endpoints for content requests
+- File upload handling for videos
+- Firestore data operations for user projects
+- Integration with OpenAI for content generation
+
+## N8N Expert Integration
+
+### Sample N8N Python Node (TikTok Expert)
+```python
+import chromadb
+
+# Connect to local ChromaDB
+client = chromadb.PersistentClient(path="./viral_content_db")
+collection = client.get_collection("viral_posts")
+
+# Get user prompt from N8N
+user_prompt = $json.user_message
+
+# Search for similar viral TikTok posts
+results = collection.query(
+    query_texts=[user_prompt],
+    n_results=3,
+    where={"platform": "tiktok"}
+)
+
+# Process results for content suggestions
+viral_examples = []
+for doc, metadata in zip(results['documents'][0], results['metadatas'][0]):
+    viral_examples.append({
+        "content": doc,
+        "hashtags": metadata.get("hashtags", []),
+        "hook": metadata.get("hook", ""),
+        "engagement": metadata.get("engagement_rate", 0)
+    })
+
+return {"viral_examples": viral_examples}
+```
+
+## Tech Stack
+- **N8N** (workflow orchestration)
+- **ChromaDB** (local vector database)
+- **Sentence Transformers** (all-MiniLM-L6-v2 embeddings)
+- **FastAPI** (API service for N8N integration)
+- **OpenAI API** (content generation)
+- **Google Cloud Firestore** (user data storage)
+- **Google Cloud Run** (API service deployment)
+
+## Development Approach
+
+### Phase 1: RAG Setup ✅ COMPLETE
+```
+backend/service/embedding-service/
+├── __init__.py              # Package marker
+├── populate_rag.py         # Main script (run once)
+├── requirements.txt        # ChromaDB + sentence-transformers
+└── README.md              # Setup instructions
+```
+
+### Phase 2: N8N Workflow Setup
+- Create N8N workflow similar to your existing expert pattern
+- Add Python nodes for ChromaDB queries
+- Create platform-specific expert agents (TikTok, Instagram)
+- Test with viral content retrieval
+
+### Phase 3: API Service Integration
+- Add N8N webhook endpoints to API service
+- Handle video uploads and file processing
+- Integrate with OpenAI for content generation
+- Deploy API service to Cloud Run
+
+### Phase 4: Frontend Integration
+- Connect React frontend to N8N webhooks
+- Display viral examples and content suggestions
+- Handle user projects and content creation
+
+## Environment Variables
+```env
+# Existing API Service
+GCP_PROJECT_ID=your-project-id
+R2_ACCOUNT_ID=your-r2-account
+R2_ACCESS_KEY_ID=your-r2-key
+R2_SECRET_ACCESS_KEY=your-r2-secret
+
+# New for AI Content Consultant
+OPENAI_API_KEY=your-openai-key
+N8N_WEBHOOK_URL=your-n8n-webhook
+CHROMADB_PATH=./viral_content_db
+```
+
+## N8N Expert Configuration
+**Platform Experts** (similar to your EightOS/Polysingularity pattern):
+- **TikTok Expert**: Queries ChromaDB with `{"platform": "tiktok"}` filter
+- **Instagram Expert**: Queries ChromaDB with `{"platform": "instagram"}` filter  
+- **Cross-Platform Expert**: Queries across all platforms
+- **Category Experts**: Filter by category (lifestyle, food, business, etc.)
+
+## Hackathon Implementation Strategy
+✅ **RAG Populated Locally** - One-time script setup
+✅ **Mock viral content data** - 10 high-quality examples included
+✅ **Simple N8N integration** - ChromaDB Python nodes
+✅ **No microservices complexity** - Single API service
+✅ **Cloud Run deployment** - Only for API service
+✅ **Fast semantic search** - ChromaDB handles embeddings
+
+## Usage Instructions
+
+### 1. Set up RAG Database (One-time)
+```bash
+cd backend/service/embedding-service
+pip install -r requirements.txt
+python populate_rag.py
+```
+
+### 2. N8N Integration
+- Use Python nodes to query `./viral_content_db`
+- Filter by platform and category as needed
+- Pass results to OpenAI for content generation
+
+### 3. API Service (Optional - for advanced features)
+- Deploy to Cloud Run for video processing
+- Handle N8N webhooks for complex operations
+- Store user projects in Firestore
+
+**Perfect for hackathon speed and simplicity! 🚀**
