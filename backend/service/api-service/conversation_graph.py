@@ -16,7 +16,7 @@ from configs import logger
 from datetime import datetime
 
 # Initialize the LLM using the existing Google GenAI SDK
-client = genai.Client(api_key="AIzaSyAqUYPSYeSqW2_o4kATsDfIAiXwF178B8c")
+client = genai.Client(api_key="")
 
 class ConversationState(TypedDict):
     """State for the conversation graph."""

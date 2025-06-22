@@ -13,7 +13,7 @@ from prompts import CREATE_CONTENT_SYSTEM_PROMPT
 from utils import extract_content_from_text, extract_json_from_response
 from conversation_graph import process_conversation
 
-client = genai.Client(api_key="AIzaSyAqUYPSYeSqW2_o4kATsDfIAiXwF178B8c")
+client = genai.Client(api_key="")
 
 router = APIRouter()
 
