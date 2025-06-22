@@ -3,10 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Mic, MicOff, Send, Upload, Bot, User, Search, Loader2, Sparkles, Video, MessageSquare, Hash, Trash2, Copy, Check } from "lucide-react";
+import { Send, Upload, Bot, User, Loader2, Sparkles, Video, MessageSquare, Hash, Trash2, Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Video as VideoType, ContentType } from "@/hooks/use-videos";
 import { useConversationService, ConversationMessage, ContentIdea } from "@/hooks/use-conversation-service";
+import { MediaType, MediaTypeSelector } from "./MediaTypeSelector";
 
 interface ChatPanelProps {
   chatInput: string;
@@ -25,6 +26,7 @@ export const ChatPanel = ({
 }: ChatPanelProps) => {
   const [isRecording, setIsRecording] = useState(false);
   const [copiedSections, setCopiedSections] = useState<Record<string, boolean>>({});
+  const [selectedMediaType, setSelectedMediaType] = useState<MediaType>('tiktok');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Use the new conversation service with state graph
@@ -76,19 +78,10 @@ export const ChatPanel = ({
       // Use the conversation service for all other messages
       // Pass the selected platforms and trending content to tailor the response
       const platformNames = selectedPlatforms.map(platform => platform.toLowerCase());
-      await sendMessage(chatInput, platformNames, videos);
+      await sendMessage(chatInput, platformNames, videos, selectedMediaType);
     }
     
     setChatInput("");
-  };
-
-  const toggleRecording = () => {
-    setIsRecording(!isRecording);
-    // Voice recording logic would go here
-  };
-
-  const handleFileUpload = () => {
-    fileInputRef.current?.click();
   };
 
   const formatTime = (date: Date) => {
@@ -186,7 +179,7 @@ export const ChatPanel = ({
         )}
 
         {/* Video Structure Section */}
-        {content.videoStructure && content.videoStructure !== 'No structure provided' && (
+        {content.videoStructure && !content.videoStructure.includes("null") && content.videoStructure !== 'No structure provided' && (
           <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-lg p-4 group">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -281,24 +274,11 @@ export const ChatPanel = ({
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center">
               <div className="p-4 bg-gradient-to-r from-violet-500/20 to-purple-500/20 rounded-2xl mb-6 border border-violet-500/30">
-                <Mic className="w-8 h-8 text-violet-400" />
               </div>
               <h3 className="text-lg font-medium text-white mb-2">Ready to go viral?</h3>
               <p className="text-sm text-zinc-400 max-w-sm">
                 Share your content idea, search for trending videos, or ask for advice. I'll remember our conversation and provide contextual responses.
               </p>
-              {videos.length > 0 && (
-                <div className="mt-4 p-3 bg-white/5 rounded-lg">
-                  <p className="text-sm text-white/70 mb-2">Recent search results:</p>
-                  <div className="text-xs text-white/50">
-                    {videos.slice(0, 3).map(video => (
-                      <div key={video.id} className="mb-1">
-                        • {video.title} ({video.content_type})
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           ) : (
             messages.map((message, index) => (
@@ -386,26 +366,11 @@ export const ChatPanel = ({
 
         {/* Input Area */}
         <div className="p-6 border-t border-zinc-800/50 space-y-4">
+          <MediaTypeSelector 
+            selectedMediaType={selectedMediaType}
+            onMediaTypeChange={setSelectedMediaType}
+          />
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleFileUpload}
-              className="bg-zinc-800/50 border-zinc-700 text-zinc-300 hover:bg-zinc-700/50 hover:text-white"
-            >
-              <Upload className="w-4 h-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={toggleRecording}
-              className={cn(
-                "bg-zinc-800/50 border-zinc-700 text-zinc-300 hover:bg-zinc-700/50 hover:text-white",
-                isRecording && "bg-red-500/20 border-red-500/50 text-red-400"
-              )}
-            >
-              {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-            </Button>
             {selectedPlatforms.length > 0 && (
               <Badge variant="secondary" className="bg-zinc-800/50 text-zinc-300 border-zinc-700">
                 {selectedPlatforms.length} platform{selectedPlatforms.length > 1 ? 's' : ''} selected

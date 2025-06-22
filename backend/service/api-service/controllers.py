@@ -275,7 +275,8 @@ async def transform_video(
                 "clips_count": len(clip_filenames),
                 "transcript": result.get("transcript", ""),
                 "message": f"Successfully generated {len(clip_filenames)} clip(s) for {target_platform}",
-                "clip_filenames": clip_filenames
+                "clip_filenames": clip_filenames,
+                "caption": result.get("caption", ""),
             }
             
             return JSONResponse(content=response_data, status_code=200)

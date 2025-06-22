@@ -44,7 +44,7 @@ export interface UseConversationServiceReturn {
   conversationContext: ConversationContext;
   
   // Actions
-  sendMessage: (userInput: string, platforms?: string[], trendingContent?: any[]) => Promise<void>;
+  sendMessage: (userInput: string, platforms?: string[], trendingContent?: any[], mediaType?: string) => Promise<void>;
   clearConversation: () => void;
   clearError: () => void;
 }
@@ -60,8 +60,8 @@ export const useConversationService = (): UseConversationServiceReturn => {
   const [conversationContext, setConversationContext] = useState<ConversationContext>({});
 
   // Send a message and get response using the conversation graph
-  const sendMessage = useCallback(async (userInput: string, platforms?: string[], trendingContent?: any[]): Promise<void> => {
-    console.log("trendingContent", trendingContent)
+  const sendMessage = useCallback(async (userInput: string, platforms?: string[], trendingContent?: any[], mediaType?: string): Promise<void> => {
+    console.log("useConversationService: sendMessage called with:", { userInput, platforms, trendingContent, mediaType });
     if (!userInput.trim()) return;
     
     setLoading(true);
@@ -84,12 +84,17 @@ export const useConversationService = (): UseConversationServiceReturn => {
         timestamp: msg.timestamp.toISOString()
       }));
       
-      console.log('useConversationService: Calling /conversation with:', {
-        user_input: userInput,
-        conversation_history: conversationHistory,
-        platforms: platforms,
-        trending_content: trendingContent
-      });
+      const userContext: any = {
+        ...conversationContext,
+        selected_platforms: platforms || [],
+        trending_content: trendingContent || [],
+      };
+      
+      if (mediaType) {
+        userContext.media_type = mediaType;
+      }
+      
+      console.log('useConversationService: Calling /conversation with context:', userContext);
       
       const response = await fetch(`${API_BASE_URL}/conversation`, {
         method: 'POST',
@@ -99,11 +104,7 @@ export const useConversationService = (): UseConversationServiceReturn => {
         body: JSON.stringify({
           user_input: userInput,
           conversation_history: conversationHistory,
-          user_context: {
-            ...conversationContext,
-            selected_platforms: platforms || [],
-            trending_content: trendingContent || []
-          }
+          user_context: userContext
         }),
       });
 

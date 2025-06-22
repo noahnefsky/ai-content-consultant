@@ -12,8 +12,41 @@ from google.genai import types
 logger = logging.getLogger(__name__)
 
 # Set the API keys
-aai.settings.api_key = "6566dcb906524974a08e82d9f62510f0"
-client = genai.Client(api_key="AIzaSyAqUYPSYeSqW2_o4kATsDfIAiXwF178B8c")
+aai.settings.api_key = os.getenv("ASSEMBLY_AI_API_KEY")
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+PROMPTS = {
+    "tiktok": {
+        "prompt": "select the single most engaging 5-15 second highlight that would work well for TikTok.",
+        "considerations": [
+            "Hook moments that grab attention in the first 3 seconds.",
+            "Emotional peaks, surprising revelations, or funny moments.",
+            "Clear, punchy statements that work without much context.",
+            "Moments that could be paired with trending audio or effects.",
+        ],
+        "caption_guidance": "an engaging, SEO-friendly caption for TikTok, including relevant hashtags."
+    },
+    "instagram": {
+        "prompt": "select the single most value-packed 15-45 second highlight that would work well as an Instagram Reel.",
+        "considerations": [
+            "A clear hook, a value point (educational, inspiring, or entertaining), and a call-to-action or concluding thought.",
+            "Visually interesting moments if described in the transcript.",
+            "Actionable tips, powerful quotes, or concise stories.",
+            "Content that encourages saves and shares.",
+        ],
+        "caption_guidance": "a descriptive caption for Instagram, asking a question to encourage comments and including relevant hashtags."
+    },
+    "twitter": {
+        "prompt": "select the single most concise, newsworthy, or controversial 10-30 second highlight that would spark conversation on Twitter/X.",
+        "considerations": [
+            "Strong opinions, key takeaways, or breaking news-style moments.",
+            "Clips that can be understood without audio, as many users scroll with sound off.",
+            "Content that poses a question or presents a bold claim.",
+            "Moments that are highly shareable or quote-tweetable.",
+        ],
+        "caption_guidance": "a witty or thought-provoking caption for Twitter/X that encourages retweets and replies."
+    },
+}
 
 class AssemblyError(RuntimeError):
     """Raised when AssemblyAI returns an error status."""
@@ -113,39 +146,41 @@ def extract_json_from_response(text: str) -> str:
     return text.strip()
 
 
-def _call_llm(transcript_text: str, target_platform: str = "tiktok") -> Dict[str, Any]:
+def _call_llm(transcript_text: str, source_media_type: str = "video", target_platform: str = "tiktok") -> Dict[str, Any]:
     """Use Gemini to analyze transcript and select engaging clips for social media.
     
     Args:
         transcript_text: The full transcript text from AssemblyAI
+        source_media_type: The type of the source video (e.g., podcast, vlog)
         target_platform: The target platform (tiktok, instagram, twitter)
     
     Returns:
         Dict with clips array and caption
     """
-    system_prompt = f"""You are an expert content strategist specializing in viral {target_platform} content.
+    prompt_config = PROMPTS.get(target_platform, PROMPTS["tiktok"])
 
-Given this transcript, analyze it and select the 2-3 most engaging 5-15 second highlights that would work well for {target_platform}.
+    system_prompt = f"""You are an expert content strategist specializing in repurposing video content. Your task is to analyze a transcript from a '{source_media_type}' and extract viral clips for {target_platform}.
 
-Consider:
-- Hook moments that grab attention quickly
-- Emotional peaks or surprising revelations
-- Clear, punchy statements that work without context
-- {target_platform}-specific content patterns and trends
+You have been asked to {prompt_config['prompt']}
 
-Return ONLY valid JSON in this exact format:
+When selecting clips, consider the following for {target_platform}:
+- {"- ".join(prompt_config['considerations'])}
+
+After selecting the clips, write {prompt_config['caption_guidance']}.
+
+Return ONLY valid JSON in this exact format, with no other text or explanation:
 {{
     "clips": [
         {{"start": float, "end": float}},
         {{"start": float, "end": float}}
     ],
-    "caption": "Engaging caption optimized for {target_platform}"
+    "caption": "Your generated caption here."
 }}
 
-The start and end times should be in seconds from the video timeline."""
+The start and end times should be in seconds from the video timeline. The transcript is below."""
 
     try:
-        logger.info(f"Calling Gemini for {target_platform} with transcript length: {len(transcript_text)}")
+        logger.info(f"Calling Gemini for {target_platform} from {source_media_type} with transcript length: {len(transcript_text)}")
         
         response = client.models.generate_content(
             model="gemini-1.5-flash",
@@ -214,12 +249,13 @@ def crop_video(source_path: str | Path, clips: List[Tuple[float, float]], output
     return outs
 
 
-def generate_highlight_reel(transcript_json: Dict[str, Any], source_video: str | Path, target_platform: str = "tiktok", out_dir: str | Path = "out") -> Dict[str, Any]:
+def generate_highlight_reel(transcript_json: Dict[str, Any], source_video: str | Path, source_media_type: str = "video", target_platform: str = "tiktok", out_dir: str | Path = "out") -> Dict[str, Any]:
     """Public API: given AssemblyAI JSON + video path → cropped clips + caption.
     
     Args:
         transcript_json: AssemblyAI transcript JSON
         source_video: Path to source video file
+        source_media_type: The type of the source video
         target_platform: Target platform (tiktok, instagram, twitter)
         out_dir: Output directory for generated clips
     
@@ -227,12 +263,16 @@ def generate_highlight_reel(transcript_json: Dict[str, Any], source_video: str |
         Dict with caption and clips array
     """
     text = transcript_json.get("text", "")
-    llm_resp = _call_llm(text, target_platform)
+    llm_resp = _call_llm(
+        transcript_text=text, 
+        source_media_type=source_media_type, 
+        target_platform=target_platform
+    )
 
     # Process all clips from LLM response
     clips: List[Tuple[float, float]] = []
     if llm_resp.get("clips"):
-        clips = [(c["start"], c["end"]) for c in llm_resp["clips"]]
+        clips = [(c["start"], c["end"]) for c in llm_resp["clips"][:1]]
     
     out_files = crop_video(source_video, clips, out_dir) if clips else []
 
@@ -245,11 +285,12 @@ def generate_highlight_reel(transcript_json: Dict[str, Any], source_video: str |
     }
 
 
-def process_video(video_path: str | Path, target_platform: str = "tiktok", output_dir: str | Path = "out") -> Dict[str, Any]:
+def process_video(video_path: str | Path, source_media_type: str = "video", target_platform: str = "tiktok", output_dir: str | Path = "out") -> Dict[str, Any]:
     """Complete video processing pipeline: transcribe → analyze → crop → return results.
     
     Args:
         video_path: Path to the source video file
+        source_media_type: The type of the source video
         target_platform: Target platform for optimization
         output_dir: Directory to save the generated clips
         
@@ -264,6 +305,7 @@ def process_video(video_path: str | Path, target_platform: str = "tiktok", outpu
         result = generate_highlight_reel(
             transcript_json=transcript_json,
             source_video=video_path,
+            source_media_type=source_media_type,
             target_platform=target_platform,
             out_dir=output_dir
         )

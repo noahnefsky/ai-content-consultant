@@ -12,6 +12,7 @@ export interface VideoTransformResponse {
   clips_count: number;
   transcript: string;
   message: string;
+  caption?: string;
   clip_filenames?: string[];
   error?: string;
 }
@@ -20,7 +21,7 @@ export interface VideoTransformResult {
   platform: string;
   clipsCount: number;
   transcript: string;
-  message: string;
+  caption: string;
   clipFilenames: string[];
 }
 
@@ -86,10 +87,10 @@ export const useVideoTransform = (): UseVideoTransformReturn => {
         platform: data.platform,
         clipsCount: data.clips_count,
         transcript: data.transcript,
-        message: data.message,
+        caption: data.caption ?? "",
         clipFilenames: data.clip_filenames || []
       };
-      
+      console.log("transformResult", transformResult.caption);
       setResult(transformResult);
       return transformResult;
       

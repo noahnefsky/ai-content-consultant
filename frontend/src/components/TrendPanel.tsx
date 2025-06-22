@@ -1,51 +1,19 @@
-import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Sparkles, Loader2, Filter } from "lucide-react";
-import { Video, ContentType } from "@/hooks/use-videos";
+import { Video } from "@/hooks/use-videos";
 
 interface TrendPanelProps {
   videos: Video[];
   loading: boolean;
   error: string | null;
-  onSearch: (searchTerm: string, contentTypes?: ContentType[]) => Promise<void>;
 }
 
 export const TrendPanel = ({ 
   videos, 
   loading, 
-  error, 
-  onSearch
+  error
 }: TrendPanelProps) => {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedMediaType, setSelectedMediaType] = useState<string>("all");
-
-  const handleSearch = async () => {
-    if (searchTerm.trim()) {
-      await onSearch(searchTerm);
-    }
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSearch();
-    }
-  };
-
-  const handleMediaTypeChange = async (value: string) => {
-    setSelectedMediaType(value);
-    if (value === "all") {
-      await onSearch(searchTerm);
-    } else {
-      // Filter by media type
-      await onSearch(searchTerm, [value as ContentType]);
-    }
-  };
-
   const platformColors = {
     tiktok: "from-pink-500 to-red-500",
     instagram: "from-purple-500 to-pink-500",
@@ -60,74 +28,33 @@ export const TrendPanel = ({
     return num.toString();
   };
 
-  // Filter videos by selected media type
-  const filteredVideos = selectedMediaType === "all" 
-    ? videos 
-    : videos.filter(video => video.content_type === selectedMediaType);
-
   return (
     <Card className="h-full bg-white/10 backdrop-blur-sm border-white/20 flex flex-col">
       <div className="flex items-center justify-between p-6 pb-4 flex-shrink-0">
         <h2 className="text-xl font-semibold text-white">Viral Trends</h2>
         <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
-          {loading ? "Searching..." : filteredVideos.length > 0 ? `${filteredVideos.length} results` : "Ready"}
+          {loading ? "Loading..." : videos.length > 0 ? `${videos.length} results` : "Ready"}
         </Badge>
       </div>
 
-      {/* Search and Filter Controls */}
-      <div className="px-6 pb-4 flex-shrink-0 space-y-3">
-        <div className="flex gap-2">
-          <Input
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Search for trending content..."
-            className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-          />
-          <Button
-            onClick={handleSearch}
-            disabled={loading || !searchTerm.trim()}
-            className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
-          >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-          </Button>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-white/60" />
-          <Select value={selectedMediaType} onValueChange={handleMediaTypeChange}>
-            <SelectTrigger className="w-full bg-white/10 border-white/20 text-white">
-              <SelectValue placeholder="Filter by media type" />
-            </SelectTrigger>
-            <SelectContent className="bg-zinc-800 border-zinc-700">
-              <SelectItem value="all" className="text-white hover:bg-zinc-700">All Media Types</SelectItem>
-              <SelectItem value="tiktok" className="text-white hover:bg-zinc-700">TikTok</SelectItem>
-              <SelectItem value="instagram" className="text-white hover:bg-zinc-700">Instagram</SelectItem>
-              <SelectItem value="twitter" className="text-white hover:bg-zinc-700">Twitter</SelectItem>
-              <SelectItem value="linkedin" className="text-white hover:bg-zinc-700">LinkedIn</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        
-        {error && (
+      
+      {error && (
+        <div className="px-6 pb-4">
           <p className="text-red-400 text-sm">{error}</p>
-        )}
-      </div>
+        </div>
+      )}
 
       <ScrollArea className="flex-1 px-6 pb-6">
-        {filteredVideos.length === 0 && !loading ? (
+        {videos.length === 0 && !loading ? (
           <div className="text-center py-8">
             <div className="text-white/50 mb-2">No videos found</div>
             <p className="text-sm text-white/40">
-              {selectedMediaType !== "all" 
-                ? `No ${selectedMediaType} content found. Try a different search or media type.`
-                : "Search for trending content to get started"
-              }
+              Trending content will appear here.
             </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4">
-            {filteredVideos.map((video) => (
+            {videos.map((video) => (
               <a
                 key={video.id}
                 href={video.url}

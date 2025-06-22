@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChatPanel } from "@/components/ChatPanel";
 import { TrendPanel } from "@/components/TrendPanel";
 import { MediaTransformPanel } from "@/components/MediaTransformPanel";
 import { PlatformSelector } from "@/components/PlatformSelector";
 import { useVideos, ContentType } from "@/hooks/use-videos";
+import { cn } from "@/lib/utils";
 
 const Index = () => {
   const [selectedPlatforms, setSelectedPlatforms] = useState<ContentType[]>([]);
@@ -87,7 +88,7 @@ const Index = () => {
           </TabsList>
 
           <div className="flex-1 mt-6 overflow-hidden">
-            <TabsContent value="trends" className="h-full m-0">
+            <div className={cn("h-full w-full", activeTab === 'trends' ? 'block' : 'hidden')}>
               <div className="grid grid-cols-2 gap-6 h-full">
                 {/* Trend Panel - Left Side */}
                 <div className="col-span-1 overflow-hidden">
@@ -110,13 +111,13 @@ const Index = () => {
                   />
                 </div>
               </div>
-            </TabsContent>
+            </div>
 
-            <TabsContent value="transform" className="h-full m-0">
+            <div className={cn("h-full w-full", activeTab === 'transform' ? 'block' : 'hidden')}>
               <div className="h-full">
                 <MediaTransformPanel />
               </div>
-            </TabsContent>
+            </div>
           </div>
         </Tabs>
       </div>

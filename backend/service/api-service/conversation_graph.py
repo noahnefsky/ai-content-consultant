@@ -404,15 +404,18 @@ def content_generator(state: ConversationState) -> ConversationState:
 
 def create_content_system_prompt(user_context: Dict, content_history: List) -> str:
     """Create enhanced system prompt for content generation with continuation awareness."""
-    base_prompt = """You are an expert content strategist specializing in viral social media content.
+    
+    media_type = user_context.get("media_type", "social media post")
+    
+    base_prompt = f"""You are an expert content strategist specializing in viral social media content. Your current task is to create a {media_type.capitalize()}.
 
 Generate structured content with this JSON format:
-{
-    "idea": "A clear, compelling concept that can go viral",
-    "videoStructure": "A detailed, flowing description of how the video unfolds - describe the scenes, pacing, and visual flow in natural sentences without numbered steps",
-    "caption": "Engaging caption that complements the video",
+{{
+    "idea": "A clear, compelling concept that can go viral on {media_type}",
+    "videoStructure": "A detailed, flowing description of how the video unfolds - describe the scenes, pacing, and visual flow in natural sentences without numbered steps. If creating for a platform that is not video-based, provide a detailed description of the post's content.",
+    "caption": "Engaging caption that complements the video or post, optimized for {media_type}",
     "hashtags": ["relevant", "trending", "hashtags"]
-}
+}}
 
 CRITICAL CONTINUATION RULES:
 - If this is a continuation/modification of previous content, acknowledge and build upon it
@@ -555,6 +558,11 @@ Your expertise includes:
 - Hashtag strategies and trending topics
 
 Be direct, concise, and actionable. When users ask for modifications to previous content, acknowledge what you're changing and why."""
+
+    # Add media type context
+    media_type = user_context.get("media_type")
+    if media_type:
+        base_prompt += f"\n\nCONTENT TARGET: The user wants to create content for {media_type.capitalize()}. All responses and content ideas should be tailored for this platform."
 
     # Add continuation-specific context
     if user_context.get("is_continuation"):
