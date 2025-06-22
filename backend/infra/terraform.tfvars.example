@@ -1,0 +1,18 @@
+# Example terraform.tfvars - DO NOT COMMIT REAL SECRETS
+# Copy to terraform.tfvars and fill in with real values locally.
+
+project_id = "your-gcp-project-id"
+region     = "us-east1"
+service_name = "api-service"
+artifact_registry_repo_id = "ai-content-consultant-repo"
+
+min_instances = 0
+max_instances = 10
+cpu_limit     = "1"
+memory_limit  = "2Gi"
+
+gemini_api_key = "<GEMINI_API_KEY>"
+cohere_api_key = "<COHERE_API_KEY>"
+qdrant_url     = "<QDRANT_URL>"
+qdrant_api_key = "<QDRANT_API_KEY>"
+hf_api_token   = "<HF_API_TOKEN>" 

@@ -1,1 +1,7 @@
-*.tfvars
+# Ignore all tfvars but keep example
+!terraform.tfvars.example
+
+# Ignore Terraform state files
+terraform.tfstate
+terraform.tfstate.backup
+.terraform/
