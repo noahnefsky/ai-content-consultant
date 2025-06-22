@@ -53,4 +53,30 @@ variable "memory_limit" {
   description = "Memory limit for Cloud Run service"
   type        = string
   default     = "2Gi"
+}
+
+# AI Service API Keys
+variable "gemini_api_key" {
+  description = "Gemini API key for Google GenAI"
+  type        = string
+  sensitive   = true
+}
+
+variable "cohere_api_key" {
+  description = "Cohere API key for rerank service"
+  type        = string
+  sensitive   = true
+}
+
+# Qdrant Cloud Configuration
+variable "qdrant_url" {
+  description = "Managed Qdrant Cloud endpoint (e.g. https://YOUR-CLUSTER.cloud.qdrant.io:6333)"
+  type        = string
+  sensitive   = true
+}
+
+variable "qdrant_api_key" {
+  description = "API key for Qdrant Cloud instance"
+  type        = string
+  sensitive   = true
 } 

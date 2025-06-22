@@ -66,6 +66,7 @@ class MultimodalPost:
     text_embedding: Optional[List[float]] = None
     image_embedding: Optional[List[float]] = None
     video_embedding: Optional[List[float]] = None
+    url: Optional[str] = None
 
 class MultimodalEmbedder:
     """Handles multimodal embeddings using CLIP and SentenceTransformers"""
@@ -215,7 +216,8 @@ class SocialMediaFetcher:
                         comments=tweet.public_metrics.get('reply_count', 0),
                         engagement_rate=self.calculate_engagement(tweet.public_metrics),
                         posted_at=tweet.created_at,
-                        category=self.classify_content(tweet.text)
+                        category=self.classify_content(tweet.text),
+                        url=getattr(tweet, 'entities', {}).get('urls', [{}])[0].get('url', "")
                     )
                     posts.append(post)
                     
@@ -270,7 +272,8 @@ class SocialMediaFetcher:
                         comments=post_data.comments,
                         engagement_rate=self.calculate_instagram_engagement(post_data),
                         posted_at=post_data.date,
-                        category=self.classify_content(post_data.caption or "")
+                        category=self.classify_content(post_data.caption or ""),
+                        url=post_data.url
                     )
                     posts.append(post)
                     count += 1
@@ -408,6 +411,7 @@ class MultimodalVectorDB:
                     "content_type": post.content_type,
                     "text": post.text,
                     "media_url": post.media_url,
+                    "url": post.url,
                     "hashtags": post.hashtags,
                     "author": post.author,
                     "views": post.views,
@@ -417,7 +421,8 @@ class MultimodalVectorDB:
                     "engagement_rate": post.engagement_rate,
                     "posted_at": post.posted_at.isoformat(),
                     "category": post.category,
-                    "added_at": datetime.now().isoformat()
+                    "added_at": datetime.now().isoformat(),
+                    "thumbnail_url": post.media_url
                 }
             )
             points.append(point)
@@ -567,6 +572,7 @@ async def main():
                     engagement_rate=engagement_rate,
                     posted_at=posted_at,
                     category=classify_content_from_hashtags(meta.get("hashtags", [])),
+                    url=meta.get("url", "")
                 )
                 posts.append(post)
                 

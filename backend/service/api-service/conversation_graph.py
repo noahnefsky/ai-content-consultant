@@ -14,9 +14,16 @@ from google import genai
 from google.genai import types
 from configs import logger
 from datetime import datetime
+from retriever import MultimodalRetriever
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Initialize the LLM using the existing Google GenAI SDK
-client = genai.Client(api_key="")
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+# Initialize global retriever (connects to Qdrant & Cohere once)
+retriever = MultimodalRetriever()
 
 class ConversationState(TypedDict):
     """State for the conversation graph."""
@@ -70,8 +77,12 @@ def context_analyzer(state: ConversationState) -> ConversationState:
         # Analyze intent
         intent = analyze_user_intent(user_input)
         
-        # Analyze conversation continuity - check if user is referencing previous content
-        is_continuation = analyze_conversation_continuity(user_input, messages, user_context)
+        # Retrieve relevant multimodal posts (RAG)
+        try:
+            rag_results = retriever.search(query_text=user_input, top_k=5)
+        except Exception as e:
+            logger.error(f"Retriever error: {e}")
+            rag_results = []
         
         # Update context with better continuity tracking
         updated_context = {
@@ -79,9 +90,12 @@ def context_analyzer(state: ConversationState) -> ConversationState:
             "current_intent": intent,
             "message_count": len(messages),
             "last_user_input": user_input,
-            "is_continuation": is_continuation,
+            "is_continuation": analyze_conversation_continuity(user_input, messages, user_context),
             "conversation_topic": extract_conversation_topic(messages),
-            "last_content_reference": find_last_content_reference(user_input, user_context.get("content_history", []))
+            "last_content_reference": find_last_content_reference(user_input, user_context.get("content_history", [])),
+            "rag_results": rag_results,
+            # For backward compatibility with other prompt sections
+            "trending_content": rag_results,
         }
         
         return {
@@ -287,6 +301,16 @@ def build_conversation_context(messages: List, user_context: Dict) -> str:
     selected_platforms = user_context.get("selected_platforms", [])
     if selected_platforms:
         context_parts.append(f"\n\nPLATFORMS: {', '.join(selected_platforms)}")
+    
+    # Add RAG results
+    rag_hits = user_context.get("rag_results", [])
+    if rag_hits:
+        context_parts.append("\n\nRELEVANT SOCIAL POSTS (from vector search):")
+        for hit in rag_hits[:5]:
+            snippet = (hit.get("text") or "")[:120].replace("\n", " ")
+            platform = hit.get("platform", "?").upper()
+            engagement = hit.get("engagement_rate", 0)
+            context_parts.append(f"- [{platform}] {snippet}… (Engagement {engagement:.1f}%)")
     
     return "\n".join(context_parts)
 

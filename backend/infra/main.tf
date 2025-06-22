@@ -84,6 +84,27 @@ resource "google_cloud_run_v2_service" "api_service" {
         value = var.log_level
       }
       
+      # Inject sensitive API keys via environment variables
+      env {
+        name  = "GEMINI_API_KEY"
+        value = var.gemini_api_key
+      }
+
+      env {
+        name  = "COHERE_API_KEY"
+        value = var.cohere_api_key
+      }
+
+      env {
+        name  = "QDRANT_URL"
+        value = var.qdrant_url
+      }
+
+      env {
+        name  = "QDRANT_API_KEY"
+        value = var.qdrant_api_key
+      }
+      
       resources {
         limits = {
           cpu    = var.cpu_limit

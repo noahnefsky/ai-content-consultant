@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { mockVideos } from '@/data/videos';
+// import { mockVideos } from '@/data/videos';
 
 // Types
 export type ContentType = 'tiktok' | 'twitter' | 'instagram' | 'linkedin';
@@ -10,6 +10,7 @@ export interface Video {
   description: string;
   content_type: ContentType;
   url: string;
+  thumbnail_url?: string;
   transcript?: string;
   post_text?: string;
   post_description?: string;
@@ -33,29 +34,19 @@ const getVideos = async (params: SearchParams): Promise<Video[]> => {
   // Simulate API call delay
   await new Promise(resolve => setTimeout(resolve, 1000));
   
-  // Filter mock data based on search term and content types
-  let filteredVideos = [...mockVideos];
-  
-  // Filter by content types if specified
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
+  const query = new URLSearchParams();
+  if (params.search_term) query.append('search_term', params.search_term);
   if (params.content_types && params.content_types.length > 0) {
-    filteredVideos = filteredVideos.filter(video => 
-      params.content_types!.includes(video.content_type)
-    );
+    query.append('content_types', params.content_types.join(','));
   }
-  
-  // Filter by search term if provided
-  if (params.search_term) {
-    const searchLower = params.search_term.toLowerCase();
-    filteredVideos = filteredVideos.filter(video => 
-      video.title.toLowerCase().includes(searchLower) ||
-      video.description.toLowerCase().includes(searchLower) ||
-      video.transcript?.toLowerCase().includes(searchLower) ||
-      video.post_text?.toLowerCase().includes(searchLower) ||
-      video.post_description?.toLowerCase().includes(searchLower)
-    );
+  const res = await fetch(`${API_BASE_URL}/videos?${query.toString()}`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch videos (${res.status})`);
   }
-  
-  return filteredVideos;
+  const data: Video[] = await res.json();
+  return data;
 };
 
 const getEmbedding = async (searchTerm: string): Promise<number[]> => {
