@@ -2,6 +2,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Video } from "@/hooks/use-videos";
+import { useState } from "react";
+import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 
 interface TrendPanelProps {
   videos: Video[];
@@ -14,6 +16,8 @@ export const TrendPanel = ({
   loading, 
   error
 }: TrendPanelProps) => {
+  const [selectedType, setSelectedType] = useState<string>("all");
+
   const platformColors = {
     tiktok: "from-pink-500 to-red-500",
     instagram: "from-purple-500 to-pink-500",
@@ -28,16 +32,44 @@ export const TrendPanel = ({
     return num.toString();
   };
 
+  const filteredVideos =
+    selectedType === "all"
+      ? videos
+      : videos.filter((video) => video.content_type === selectedType);
+  
+  const contentTypes = ["all", ...Object.keys(platformColors)];
+
   return (
     <Card className="h-full bg-white/10 backdrop-blur-sm border-white/20 flex flex-col">
       <div className="flex items-center justify-between p-6 pb-4 flex-shrink-0">
         <h2 className="text-xl font-semibold text-white">Viral Trends</h2>
         <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
-          {loading ? "Loading..." : videos.length > 0 ? `${videos.length} results` : "Ready"}
+          {loading ? "Loading..." : `${filteredVideos.length} results`}
         </Badge>
       </div>
 
-      
+      <div className="px-6 pb-4 flex-shrink-0">
+        <ToggleGroup
+          type="single"
+          defaultValue="all"
+          onValueChange={(value) => {
+            if (value) setSelectedType(value);
+          }}
+          className="justify-start space-x-1"
+        >
+          {contentTypes.map((type) => (
+            <ToggleGroupItem
+              key={type}
+              value={type}
+              aria-label={`Filter ${type}`}
+              className="capitalize bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white data-[state=on]:bg-white/20 data-[state=on]:text-white px-3 h-8"
+            >
+              {type}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </div>
+
       {error && (
         <div className="px-6 pb-4">
           <p className="text-red-400 text-sm">{error}</p>
@@ -45,16 +77,18 @@ export const TrendPanel = ({
       )}
 
       <ScrollArea className="flex-1 px-6 pb-6">
-        {videos.length === 0 && !loading ? (
+        {filteredVideos.length === 0 && !loading ? (
           <div className="text-center py-8">
             <div className="text-white/50 mb-2">No videos found</div>
             <p className="text-sm text-white/40">
-              Trending content will appear here.
+              {videos.length > 0 && selectedType !== 'all' 
+                ? `No videos found for ${selectedType}. Try another category.`
+                : 'Trending content will appear here.'}
             </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4">
-            {videos.map((video) => (
+            {filteredVideos.map((video) => (
               <a
                 key={video.id}
                 href={video.url}
