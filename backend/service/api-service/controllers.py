@@ -255,7 +255,11 @@ async def transform_video(
             logger.info(f"Saved video to {video_path}")
 
             # Process video, saving clips to the permanent directory
-            result = process_video(video_path, target_platform, CLIPS_DIR)
+            result = process_video(
+                video_path=video_path, 
+                target_platform=target_platform, 
+                output_dir=CLIPS_DIR
+            )
             
             logger.info(f"Video processing completed: {len(result.get('clips', []))} clips generated")
             
@@ -275,8 +279,7 @@ async def transform_video(
                 "clips_count": len(clip_filenames),
                 "transcript": result.get("transcript", ""),
                 "message": f"Successfully generated {len(clip_filenames)} clip(s) for {target_platform}",
-                "clip_filenames": clip_filenames,
-                "caption": result.get("caption", ""),
+                "clip_filenames": clip_filenames
             }
             
             return JSONResponse(content=response_data, status_code=200)

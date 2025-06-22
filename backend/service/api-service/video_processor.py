@@ -146,11 +146,11 @@ def extract_json_from_response(text: str) -> str:
     return text.strip()
 
 
-def _call_llm(transcript_text: str, source_media_type: str = "video", target_platform: str = "tiktok") -> Dict[str, Any]:
+def _call_llm(transcript_json: Dict[str, Any], source_media_type: str = "video", target_platform: str = "tiktok") -> Dict[str, Any]:
     """Use Gemini to analyze transcript and select engaging clips for social media.
     
     Args:
-        transcript_text: The full transcript text from AssemblyAI
+        transcript_json: The full transcript object from AssemblyAI
         source_media_type: The type of the source video (e.g., podcast, vlog)
         target_platform: The target platform (tiktok, instagram, twitter)
     
@@ -158,6 +158,28 @@ def _call_llm(transcript_text: str, source_media_type: str = "video", target_pla
         Dict with clips array and caption
     """
     prompt_config = PROMPTS.get(target_platform, PROMPTS["tiktok"])
+
+    # Extract data from transcript
+    transcript_text = transcript_json.get("text", "")
+    summary = transcript_json.get("summary", "")
+    highlights = transcript_json.get("auto_highlights", [])
+
+    # Build additional context from summary and highlights
+    additional_context_parts = []
+    if summary:
+        additional_context_parts.append(f"Summary: {summary}")
+    if highlights:
+        highlight_texts = [h['text'] for h in highlights]
+        additional_context_parts.append(f"Key Moments: {json.dumps(highlight_texts, indent=2)}")
+    
+    additional_context = "\n\n".join(additional_context_parts)
+    
+    context_section = ""
+    if additional_context:
+        context_section = f"""
+To help you, here is some additional context from the video:
+{additional_context}
+"""
 
     system_prompt = f"""You are an expert content strategist specializing in repurposing video content. Your task is to analyze a transcript from a '{source_media_type}' and extract viral clips for {target_platform}.
 
@@ -167,7 +189,7 @@ When selecting clips, consider the following for {target_platform}:
 - {"- ".join(prompt_config['considerations'])}
 
 After selecting the clips, write {prompt_config['caption_guidance']}.
-
+{context_section}
 Return ONLY valid JSON in this exact format, with no other text or explanation:
 {{
     "clips": [
@@ -177,7 +199,7 @@ Return ONLY valid JSON in this exact format, with no other text or explanation:
     "caption": "Your generated caption here."
 }}
 
-The start and end times should be in seconds from the video timeline. The transcript is below."""
+The start and end times should be in seconds from the video timeline. The full transcript is below."""
 
     try:
         logger.info(f"Calling Gemini for {target_platform} from {source_media_type} with transcript length: {len(transcript_text)}")
@@ -264,7 +286,7 @@ def generate_highlight_reel(transcript_json: Dict[str, Any], source_video: str |
     """
     text = transcript_json.get("text", "")
     llm_resp = _call_llm(
-        transcript_text=text, 
+        transcript_json=transcript_json, 
         source_media_type=source_media_type, 
         target_platform=target_platform
     )
@@ -312,7 +334,7 @@ def process_video(video_path: str | Path, source_media_type: str = "video", targ
         
         # Add transcript to the final result
         result["transcript"] = transcript_json.get("text", "")
-        
+        print(result)        
         return result
         
     except Exception as e:

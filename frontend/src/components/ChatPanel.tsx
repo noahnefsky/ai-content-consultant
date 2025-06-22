@@ -3,11 +3,14 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Send, Upload, Bot, User, Loader2, Sparkles, Video, MessageSquare, Hash, Trash2, Copy, Check } from "lucide-react";
+import { Send, Upload, Bot, User, Loader2, Sparkles, Video, MessageSquare, Hash, Trash2, Copy, Check, FileDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Video as VideoType, ContentType } from "@/hooks/use-videos";
 import { useConversationService, ConversationMessage, ContentIdea } from "@/hooks/use-conversation-service";
 import { MediaType, MediaTypeSelector } from "./MediaTypeSelector";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 interface ChatPanelProps {
   chatInput: string;
@@ -27,6 +30,8 @@ export const ChatPanel = ({
   const [isRecording, setIsRecording] = useState(false);
   const [copiedSections, setCopiedSections] = useState<Record<string, boolean>>({});
   const [selectedMediaType, setSelectedMediaType] = useState<MediaType>('tiktok');
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [contentToExport, setContentToExport] = useState<ContentIdea | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Use the new conversation service with state graph
@@ -82,6 +87,26 @@ export const ChatPanel = ({
     }
     
     setChatInput("");
+  };
+
+  const handleExport = () => {
+    if (!contentToExport) return;
+
+    const input = document.getElementById(`export-content-${contentToExport.idea}`);
+    if (input) {
+      html2canvas(input, { backgroundColor: null }).then((canvas) => {
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({
+          orientation: 'portrait',
+          unit: 'px',
+          format: [canvas.width, canvas.height]
+        });
+        pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+        pdf.save("content-idea.pdf");
+      });
+    }
+    setShowExportDialog(false);
+    setContentToExport(null);
   };
 
   const formatTime = (date: Date) => {
@@ -154,7 +179,7 @@ export const ChatPanel = ({
     
     // For structured content, show ONLY the cards without any initial text
     return (
-      <div className="mt-4 space-y-4">
+      <div id={`export-content-${content.idea}`} className="mt-4 space-y-4">
         {/* Idea Section */}
         {content.idea && content.idea !== 'No idea generated' && (
           <div className="bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-lg p-4 group">
@@ -226,192 +251,232 @@ export const ChatPanel = ({
           </div>
         )}
 
-
+        {/* Export Button */}
+        <div className="flex justify-end pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setContentToExport(content);
+                setShowExportDialog(true);
+              }}
+              className="bg-zinc-800/50 border-zinc-700/50 hover:bg-zinc-700/50 text-zinc-300 hover:text-white"
+            >
+              <FileDown className="w-4 h-4 mr-2" />
+              Export to PDF
+            </Button>
+        </div>
       </div>
     );
   };
 
   return (
-    <Card className="h-full bg-black/40 backdrop-blur-xl border-zinc-800/50 shadow-2xl">
-      <CardHeader className="border-b border-zinc-800/50 pb-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-r from-violet-500 to-purple-500 rounded-lg">
-              <Bot className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-white">AI Content Assistant</h2>
-              <p className="text-sm text-zinc-400">
-                {messages.length > 0 ? `${messages.length} messages` : 'Tell us your idea or upload a video'}
-              </p>
-            </div>
-          </div>
-          
-          {/* Conversation Context Badge */}
-          {conversationContext.current_intent && (
-            <Badge variant="secondary" className="bg-violet-500/20 text-violet-300 border-violet-500/30">
-              {conversationContext.current_intent.replace('_', ' ')}
-            </Badge>
-          )}
-          
-          {/* Clear Conversation Button */}
-          {messages.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clearConversation}
-              className="text-zinc-400 hover:text-white hover:bg-zinc-800/50"
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
-          )}
-        </div>
-      </CardHeader>
-
-      <CardContent className="p-0 flex flex-col h-[calc(100%-100px)]">
-        {/* Messages */}
-        <div className="flex-1 p-6 overflow-y-auto space-y-4">
-          {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <div className="p-4 bg-gradient-to-r from-violet-500/20 to-purple-500/20 rounded-2xl mb-6 border border-violet-500/30">
+    <>
+      <Card className="h-full bg-black/40 backdrop-blur-xl border-zinc-800/50 shadow-2xl">
+        <CardHeader className="border-b border-zinc-800/50 pb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-gradient-to-r from-violet-500 to-purple-500 rounded-lg">
+                <Bot className="w-5 h-5 text-white" />
               </div>
-              <h3 className="text-lg font-medium text-white mb-2">Ready to go viral?</h3>
-              <p className="text-sm text-zinc-400 max-w-sm">
-                Share your content idea, search for trending videos, or ask for advice. I'll remember our conversation and provide contextual responses.
-              </p>
+              <div>
+                <h2 className="text-lg font-semibold text-white">AI Content Assistant</h2>
+                <p className="text-sm text-zinc-400">
+                  {messages.length > 0 ? `${messages.length} messages` : 'Tell us your idea or upload a video'}
+                </p>
+              </div>
             </div>
-          ) : (
-            messages.map((message, index) => (
-              <div
-                key={index}
-                className={cn(
-                  "flex gap-3 max-w-[90%]",
-                  message.type === 'user' ? "ml-auto flex-row-reverse" : ""
-                )}
+            
+            {/* Conversation Context Badge */}
+            {conversationContext.current_intent && (
+              <Badge variant="secondary" className="bg-violet-500/20 text-violet-300 border-violet-500/30">
+                {conversationContext.current_intent.replace('_', ' ')}
+              </Badge>
+            )}
+            
+            {/* Clear Conversation Button */}
+            {messages.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearConversation}
+                className="text-zinc-400 hover:text-white hover:bg-zinc-800/50"
               >
-                <div className={cn(
-                  "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
-                  message.type === 'user' 
-                    ? "bg-gradient-to-r from-blue-500 to-cyan-500" 
-                    : "bg-gradient-to-r from-violet-500 to-purple-500"
-                )}>
-                  {message.type === 'user' ? (
-                    <User className="w-4 h-4 text-white" />
-                  ) : (
-                    <Bot className="w-4 h-4 text-white" />
-                  )}
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+
+        <CardContent className="p-0 flex flex-col h-[calc(100%-100px)]">
+          {/* Messages */}
+          <div className="flex-1 p-6 overflow-y-auto space-y-4">
+            {messages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center">
+                <div className="p-4 bg-gradient-to-r from-violet-500/20 to-purple-500/20 rounded-2xl mb-6 border border-violet-500/30">
                 </div>
-                <div className={cn(
-                  "rounded-2xl px-4 py-3 shadow-lg flex-1",
-                  message.type === 'user'
-                    ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
-                    : "bg-zinc-800/50 text-zinc-100 border border-zinc-700/30"
-                )}>
-                  {/* Only show message content if there's no structured content, or if it's a user message */}
-                  {(message.type === 'user' || !message.structuredContent) && (
-                    <p className="text-sm leading-relaxed">{message.content}</p>
+                <h3 className="text-lg font-medium text-white mb-2">Ready to go viral?</h3>
+                <p className="text-sm text-zinc-400 max-w-sm">
+                  Share your content idea, search for trending videos, or ask for advice. I'll remember our conversation and provide contextual responses.
+                </p>
+              </div>
+            ) : (
+              messages.map((message, index) => (
+                <div
+                  key={index}
+                  className={cn(
+                    "flex gap-3 max-w-[90%]",
+                    message.type === 'user' ? "ml-auto flex-row-reverse" : ""
                   )}
-                  
-                  {/* Render generated content if available */}
-                  {message.structuredContent && (() => {
-                    console.log('ChatPanel: Rendering structured content for message:', message.structuredContent);
-                    return renderGeneratedContent(message.structuredContent);
-                  })()}
-                  
-                  <div className="text-xs opacity-60 mt-2">
-                    {formatTime(message.timestamp)}
+                >
+                  <div className={cn(
+                    "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
+                    message.type === 'user' 
+                      ? "bg-gradient-to-r from-blue-500 to-cyan-500" 
+                      : "bg-gradient-to-r from-violet-500 to-purple-500"
+                  )}>
+                    {message.type === 'user' ? (
+                      <User className="w-4 h-4 text-white" />
+                    ) : (
+                      <Bot className="w-4 h-4 text-white" />
+                    )}
+                  </div>
+                  <div className={cn(
+                    "rounded-2xl px-4 py-3 shadow-lg flex-1",
+                    message.type === 'user'
+                      ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
+                      : "bg-zinc-800/50 text-zinc-100 border border-zinc-700/30"
+                  )}>
+                    {/* Only show message content if there's no structured content, or if it's a user message */}
+                    {(message.type === 'user' || !message.structuredContent) && (
+                      <p className="text-sm leading-relaxed">{message.content}</p>
+                    )}
+                    
+                    {/* Render generated content if available */}
+                    {message.structuredContent && (() => {
+                      console.log('ChatPanel: Rendering structured content for message:', message.structuredContent);
+                      return renderGeneratedContent(message.structuredContent);
+                    })()}
+                    
+                    <div className="text-xs opacity-60 mt-2">
+                      {formatTime(message.timestamp)}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+
+            {/* AI Loading Indicator */}
+            {loading && (
+              <div className="flex items-center gap-3 max-w-[90%]">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-to-r from-violet-500 to-purple-500">
+                  <Bot className="w-4 h-4 text-white" />
+                </div>
+                <div className="rounded-2xl px-4 py-3 shadow-lg bg-zinc-800/50 text-zinc-100 border border-zinc-700/30">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-violet-400" />
+                    <span className="text-sm">Processing your message...</span>
                   </div>
                 </div>
               </div>
-            ))
-          )}
+            )}
 
-          {/* AI Loading Indicator */}
-          {loading && (
-            <div className="flex items-center gap-3 max-w-[90%]">
-              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-to-r from-violet-500 to-purple-500">
-                <Bot className="w-4 h-4 text-white" />
-              </div>
-              <div className="rounded-2xl px-4 py-3 shadow-lg bg-zinc-800/50 text-zinc-100 border border-zinc-700/30">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-violet-400" />
-                  <span className="text-sm">Processing your message...</span>
+            {/* Error Display */}
+            {error && (
+              <div className="flex items-center gap-3 max-w-[90%]">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-to-r from-red-500 to-pink-500">
+                  <Bot className="w-4 h-4 text-white" />
+                </div>
+                <div className="rounded-2xl px-4 py-3 shadow-lg bg-red-500/10 text-red-100 border border-red-500/30">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm">Error: {error}</p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearError}
+                      className="text-red-300 hover:text-red-100"
+                    >
+                      ×
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* Error Display */}
-          {error && (
-            <div className="flex items-center gap-3 max-w-[90%]">
-              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-to-r from-red-500 to-pink-500">
-                <Bot className="w-4 h-4 text-white" />
-              </div>
-              <div className="rounded-2xl px-4 py-3 shadow-lg bg-red-500/10 text-red-100 border border-red-500/30">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm">Error: {error}</p>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={clearError}
-                    className="text-red-300 hover:text-red-100"
-                  >
-                    ×
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Input Area */}
-        <div className="p-6 border-t border-zinc-800/50 space-y-4">
-          <MediaTypeSelector 
-            selectedMediaType={selectedMediaType}
-            onMediaTypeChange={setSelectedMediaType}
-          />
-          <div className="flex gap-2">
-            {selectedPlatforms.length > 0 && (
-              <Badge variant="secondary" className="bg-zinc-800/50 text-zinc-300 border-zinc-700">
-                {selectedPlatforms.length} platform{selectedPlatforms.length > 1 ? 's' : ''} selected
-              </Badge>
             )}
           </div>
-          
-          <div className="flex gap-3">
-            <Textarea
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              placeholder="Describe your content idea, search for trends, or ask for advice..."
-              className="bg-zinc-900/50 border-zinc-700 text-white placeholder:text-zinc-500 resize-none focus:border-violet-500/50 focus:ring-violet-500/20"
-              rows={2}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
+
+          {/* Input Area */}
+          <div className="p-6 border-t border-zinc-800/50 space-y-4">
+            <MediaTypeSelector 
+              selectedMediaType={selectedMediaType}
+              onMediaTypeChange={setSelectedMediaType}
+            />
+            <div className="flex gap-2">
+              {selectedPlatforms.length > 0 && (
+                <Badge variant="secondary" className="bg-zinc-800/50 text-zinc-300 border-zinc-700">
+                  {selectedPlatforms.length} platform{selectedPlatforms.length > 1 ? 's' : ''} selected
+                </Badge>
+              )}
+            </div>
+            
+            <div className="flex gap-3">
+              <Textarea
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="Describe your content idea, search for trends, or ask for advice..."
+                className="bg-zinc-900/50 border-zinc-700 text-white placeholder:text-zinc-500 resize-none focus:border-violet-500/50 focus:ring-violet-500/20"
+                rows={2}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+              />
+              <Button
+                onClick={handleSendMessage}
+                disabled={!chatInput.trim() || loading}
+                className="bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white shadow-lg"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              </Button>
+            </div>
+            
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="video/*"
+              className="hidden"
+              onChange={(e) => {
+                console.log("File uploaded:", e.target.files?.[0]);
               }}
             />
-            <Button
-              onClick={handleSendMessage}
-              disabled={!chatInput.trim() || loading}
-              className="bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white shadow-lg"
-            >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            </Button>
           </div>
-          
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="video/*"
-            className="hidden"
-            onChange={(e) => {
-              console.log("File uploaded:", e.target.files?.[0]);
-            }}
-          />
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+      <AlertDialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+        <AlertDialogContent className="bg-zinc-900 border-zinc-800 text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Export to PDF</AlertDialogTitle>
+            <AlertDialogDescription className="text-zinc-400">
+              Are you sure you want to export the generated content idea to a PDF?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              onClick={() => setContentToExport(null)}
+              className="bg-transparent border-zinc-700 hover:bg-zinc-800 text-zinc-300 hover:text-white"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleExport}
+              className="bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white"
+            >
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 };
