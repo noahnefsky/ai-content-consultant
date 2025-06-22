@@ -1,6 +1,7 @@
 import json
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form 
+from fastapi.responses import JSONResponse, FileResponse
+import tempfile
 from pydantic import BaseModel
 from typing import List, Optional
 from configs import logger
@@ -14,12 +15,18 @@ from utils import extract_content_from_text, extract_json_from_response
 from conversation_graph import process_conversation
 from dotenv import load_dotenv
 from retriever import MultimodalRetriever
+from video_processor import process_video
+from pathlib import Path
 
 load_dotenv()
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 router = APIRouter()
+
+# Directory for storing generated clips
+CLIPS_DIR = Path("generated_clips")
+CLIPS_DIR.mkdir(exist_ok=True)
 
 # Shared Qdrant/Cohere retriever instance
 video_retriever = MultimodalRetriever()
@@ -212,3 +219,78 @@ async def search_videos_endpoint(search_term: Optional[str] = None, content_type
     except Exception as e:
         logger.error(f"/videos search failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to search videos")
+
+
+
+class VideoTransformRequest(BaseModel):
+    """Request model for video transformation."""
+    target_platform: str  # tiktok, instagram, twitter
+
+
+@router.post("/transform-video")
+async def transform_video(
+    video: UploadFile = File(...),
+    target_platform: str = Form("tiktok")
+):
+    """Transform uploaded video into platform-optimized clips."""
+    logger.info(f"Video transformation request received for platform: {target_platform}")
+
+    # Validate platform
+    valid_platforms = ["tiktok", "instagram", "twitter"]
+    if target_platform not in valid_platforms:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid platform. Must be one of: {', '.join(valid_platforms)}"
+        )
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        video_path = temp_path / f"input_{video.filename}"
+        
+        try:
+            with open(video_path, "wb") as buffer:
+                content = await video.read()
+                buffer.write(content)
+            
+            logger.info(f"Saved video to {video_path}")
+
+            # Process video, saving clips to the permanent directory
+            result = process_video(video_path, target_platform, CLIPS_DIR)
+            
+            logger.info(f"Video processing completed: {len(result.get('clips', []))} clips generated")
+            
+            # Get filenames of generated clips
+            clip_filenames = [Path(clip_path).name for clip_path in result.get('clips', [])]
+            
+            if not clip_filenames:
+                raise HTTPException(
+                    status_code=500,
+                    detail="No clip files generated"
+                )
+            
+            # Prepare response
+            response_data = {
+                "success": True,
+                "platform": target_platform,
+                "clips_count": len(clip_filenames),
+                "transcript": result.get("transcript", ""),
+                "message": f"Successfully generated {len(clip_filenames)} clip(s) for {target_platform}",
+                "clip_filenames": clip_filenames
+            }
+            
+            return JSONResponse(content=response_data, status_code=200)
+
+        except Exception as e:
+            logger.error(f"Error in transform_video endpoint: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Video transformation failed: {str(e)}"
+            )
+
+@router.get("/download-clip/{filename}")
+async def download_clip(filename: str):
+    """Download a generated video clip by filename."""
+    file_path = CLIPS_DIR / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Clip not found")
+    return FileResponse(str(file_path), media_type="video/mp4", filename=filename)
