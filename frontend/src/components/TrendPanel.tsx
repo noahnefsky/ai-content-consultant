@@ -2,7 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Video } from "@/hooks/use-videos";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 
 interface TrendPanelProps {
@@ -17,6 +17,17 @@ export const TrendPanel = ({
   error
 }: TrendPanelProps) => {
   const [selectedType, setSelectedType] = useState<string>("all");
+  const [filteredVideos, setFilteredVideos] = useState<Video[]>([]);
+
+  // Update filtered videos whenever videos or selectedType changes
+  useEffect(() => {
+    const newFilteredVideos = selectedType === "all"
+      ? videos
+      : videos.filter((video) => video.content_type === selectedType);
+    
+    setFilteredVideos(newFilteredVideos);
+    console.log("Updated filteredVideos:", newFilteredVideos);
+  }, [videos, selectedType]);
 
   const platformColors = {
     tiktok: "from-pink-500 to-red-500",
@@ -32,11 +43,6 @@ export const TrendPanel = ({
     return num.toString();
   };
 
-  const filteredVideos =
-    selectedType === "all"
-      ? videos
-      : videos.filter((video) => video.content_type === selectedType);
-  
   const contentTypes = ["all", ...Object.keys(platformColors)];
 
   return (
@@ -51,9 +57,9 @@ export const TrendPanel = ({
       <div className="px-6 pb-4 flex-shrink-0">
         <ToggleGroup
           type="single"
-          defaultValue="all"
+          value={selectedType}
           onValueChange={(value) => {
-            if (value) setSelectedType(value);
+            setSelectedType(value || "all");
           }}
           className="justify-start space-x-1"
         >
@@ -88,66 +94,71 @@ export const TrendPanel = ({
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4">
-            {filteredVideos.map((video) => (
-              <a
-                key={video.id}
-                href={video.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block"
-              >
-                <Card className="bg-white/5 border-white/10 p-4 hover:bg-white/10 transition-all cursor-pointer">
-                  <div className="flex items-center justify-between mb-3">
-                    <Badge
-                      className={`bg-gradient-to-r ${platformColors[video.content_type]} text-white border-0`}
-                    >
-                      {video.content_type.charAt(0).toUpperCase() + video.content_type.slice(1)}
-                    </Badge>
-                    <div className="text-right">
-                      <div className="text-sm font-semibold text-white">
-                        {formatNumber(video.views)}
+            {filteredVideos.map((video, index) => {
+              // Ensure unique key - use video.id if available, otherwise fallback to index
+              const uniqueKey = video.id && video.id.trim() ? video.id : `video-${index}-${video.content_type}`;
+              
+              return (
+                <a
+                  key={uniqueKey}
+                  href={video.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                >
+                  <Card className="bg-white/5 border-white/10 p-4 hover:bg-white/10 transition-all cursor-pointer">
+                    <div className="flex items-center justify-between mb-3">
+                      <Badge
+                        className={`bg-gradient-to-r ${platformColors[video.content_type]} text-white border-0`}
+                      >
+                        {video.content_type.charAt(0).toUpperCase() + video.content_type.slice(1)}
+                      </Badge>
+                      <div className="text-right">
+                        <div className="text-sm font-semibold text-white">
+                          {formatNumber(video.views)}
+                        </div>
+                        <div className="text-xs text-white/60">views</div>
                       </div>
-                      <div className="text-xs text-white/60">views</div>
                     </div>
-                  </div>
 
-                  <img
-                    src={video.thumbnail_url || '/placeholder.svg'}
-                    alt={video.title}
-                    className="w-full h-48 object-cover rounded-lg mb-3"
-                  />
+                    <img
+                      src={video.thumbnail_url || '/placeholder.svg'}
+                      alt={video.title}
+                      className="w-full h-48 object-cover rounded-lg mb-3"
+                    />
 
-                  <h3 className="font-semibold text-white mb-2">{video.title}</h3>
-                  <p className="text-sm text-white/70 mb-3 line-clamp-2">
-                    {video.description}
-                  </p>
+                    <h3 className="font-semibold text-white mb-2">{video.title}</h3>
+                    <p className="text-sm text-white/70 mb-3 line-clamp-2">
+                      {video.description}
+                    </p>
 
-                  {/* Content-specific info */}
-                  {video.content_type === 'tiktok' && video.transcript && (
-                    <div className="text-xs text-white/60 mb-3 p-2 bg-white/5 rounded">
-                      <strong>Transcript:</strong> {video.transcript.substring(0, 100)}...
+                    {/* Content-specific info */}
+                    {video.content_type === 'tiktok' && video.transcript && (
+                      <div className="text-xs text-white/60 mb-3 p-2 bg-white/5 rounded">
+                        <strong>Transcript:</strong> {video.transcript.substring(0, 100)}...
+                      </div>
+                    )}
+
+                    {video.content_type === 'twitter' && video.post_text && (
+                      <div className="text-xs text-white/60 mb-3 p-2 bg-white/5 rounded">
+                        <strong>Post:</strong> {video.post_text.substring(0, 100)}...
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex gap-2 text-sm">
+                        <span className="text-green-400 font-medium">
+                          {formatNumber(video.likes)} likes
+                        </span>
+                        <span className="text-blue-400 font-medium">
+                          {formatNumber(video.shares)} shares
+                        </span>
+                      </div>
                     </div>
-                  )}
-
-                  {video.content_type === 'twitter' && video.post_text && (
-                    <div className="text-xs text-white/60 mb-3 p-2 bg-white/5 rounded">
-                      <strong>Post:</strong> {video.post_text.substring(0, 100)}...
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between">
-                    <div className="flex gap-2 text-sm">
-                      <span className="text-green-400 font-medium">
-                        {formatNumber(video.likes)} likes
-                      </span>
-                      <span className="text-blue-400 font-medium">
-                        {formatNumber(video.shares)} shares
-                      </span>
-                    </div>
-                  </div>
-                </Card>
-              </a>
-            ))}
+                  </Card>
+                </a>
+              );
+            })}
           </div>
         )}
       </ScrollArea>

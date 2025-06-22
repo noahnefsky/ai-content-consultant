@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-// import { mockVideos } from '@/data/videos';
+import { mockVideos } from '@/data/videos';
 
 // Types
 export type ContentType = 'tiktok' | 'twitter' | 'instagram' | 'linkedin';
@@ -82,24 +82,29 @@ export const useVideos = (): UseVideosReturn => {
   const fetchVideos = useCallback(async (params: SearchParams) => {
     setLoading(true);
     setError(null);
-    
     try {
-      let apiParams = { ...params };
-      
-      // If search term is provided, get embedding first
+      // If a search_term is provided, only hit the API for semantic search.
       if (params.search_term) {
-        const embedding = await getEmbedding(params.search_term);
-        // Add embedding to API params (you can modify this based on your API structure)
-        apiParams = {
-          ...apiParams,
-          embedding: embedding
-        };
+        const fetchedVideos = await getVideos(params);
+        setVideos(fetchedVideos);
+        return;
       }
-      
-      const fetchedVideos = await getVideos(apiParams);
-      setVideos(fetchedVideos);
+
+      // For browsing: fetch real TikTok videos and combine with all other mocks.
+      // The TrendPanel will handle client-side filtering.
+      const realTikTokVideos = await getVideos({ content_types: ["tiktok"] });
+      const otherPlatformMocks = mockVideos.filter(
+        (v) => v.content_type !== "tiktok"
+      );
+
+      setVideos([...realTikTokVideos, ...otherPlatformMocks]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch videos');
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to fetch videos. Using only mock data."
+      );
+      setVideos(mockVideos); // Fallback to all mock data if API fails.
     } finally {
       setLoading(false);
     }

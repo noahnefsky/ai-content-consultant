@@ -36,7 +36,8 @@ const Index = () => {
     if (searchTerm.trim()) {
       await fetchVideos({
         search_term: searchTerm,
-        content_types: contentTypes || selectedPlatforms.length > 0 ? selectedPlatforms : undefined
+        content_types:
+          contentTypes ?? (selectedPlatforms.length > 0 ? selectedPlatforms : undefined),
       });
     } else if (contentTypes) {
       // If no search term but content types are specified, show all videos of that type
@@ -92,7 +93,6 @@ const Index = () => {
                     videos={videos}
                     loading={loading}
                     error={error}
-                    onSearch={handleSearch}
                   />
                 </div>
 
