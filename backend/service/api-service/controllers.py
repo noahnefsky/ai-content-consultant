@@ -11,8 +11,9 @@ from google.genai import types
 from models import ContentGenerationRequest
 from prompts import CREATE_CONTENT_SYSTEM_PROMPT
 from utils import extract_content_from_text, extract_json_from_response
+from conversation_graph import process_conversation
 
-client = genai.Client(api_key="GEMINI_API_KEY")
+client = genai.Client(api_key="AIzaSyAqUYPSYeSqW2_o4kATsDfIAiXwF178B8c")
 
 router = APIRouter()
 
@@ -70,7 +71,6 @@ async def generate_content(request: ContentGenerationRequest):
 
         # Get the response text
         raw = response.text
-        print(f"Raw Gemini response: {raw}")
         logger.info(f"Raw Gemini response: {raw}")
         
         # Handle case where response.text might be None
@@ -105,4 +105,48 @@ async def generate_content(request: ContentGenerationRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Content generation failed: {str(e)}"
+        )
+
+
+class ConversationRequest(BaseModel):
+    """Request model for conversation management."""
+    user_input: str
+    conversation_history: Optional[List[dict]] = None
+    user_context: Optional[dict] = None
+
+
+@router.post("/conversation")
+async def conversation_endpoint(request: ConversationRequest):
+    """Conversation endpoint using LangGraph state management"""
+    logger.info(f"Conversation request received: {request.user_input}")
+    try:
+        # Process conversation using the state graph
+        result = process_conversation(
+            user_input=request.user_input,
+            conversation_history=request.conversation_history or [],
+            user_context=request.user_context or {}
+        )
+        
+        if not result["success"]:
+            raise HTTPException(
+                status_code=500,
+                detail=result.get("error", "Conversation processing failed")
+            )
+        
+        # Prepare response
+        response_data = {
+            "success": True,
+            "response": result["response"],
+            "structured_content": result.get("structured_content"),
+            "conversation_context": result.get("conversation_context", {}),
+            "content_history": result.get("content_history", [])
+        }
+        
+        return JSONResponse(content=response_data, status_code=200)
+        
+    except Exception as e:
+        logger.error(f"Error in conversation endpoint: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Conversation failed: {str(e)}"
         )

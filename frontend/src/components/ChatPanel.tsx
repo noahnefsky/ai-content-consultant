@@ -3,12 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Mic, MicOff, Send, Upload, Bot, User, Search, Loader2, Sparkles, Video, MessageSquare, Hash } from "lucide-react";
+import { Mic, MicOff, Send, Upload, Bot, User, Search, Loader2, Sparkles, Video, MessageSquare, Hash, Trash2, Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Video as VideoType, ContentType } from "@/hooks/use-videos";
-import { useAIService } from "@/hooks/use-ai-service";
-import { ContentGenerationRequest, ContentIdea } from "../../../services/ai-content-service";
-import { useGeminiService } from "@/hooks/use-gemini-service";
+import { useConversationService, ConversationMessage, ContentIdea } from "@/hooks/use-conversation-service";
 
 interface ChatPanelProps {
   chatInput: string;
@@ -26,33 +24,25 @@ export const ChatPanel = ({
   videos
 }: ChatPanelProps) => {
   const [isRecording, setIsRecording] = useState(false);
-  const [messages, setMessages] = useState<Array<{ 
-    type: 'user' | 'assistant', 
-    content: string,
-    timestamp: Date,
-    generatedContent?: ContentIdea
-  }>>([]);
+  const [copiedSections, setCopiedSections] = useState<Record<string, boolean>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Use the unified AI service
-  // const { generateCustomContent, aiLoading, aiError } = useAIService();
-
-  const { generateContent, loading, error, lastResponse } = useGeminiService();
+  // Use the new conversation service with state graph
+  const { 
+    messages, 
+    loading, 
+    error, 
+    conversationContext,
+    sendMessage, 
+    clearConversation, 
+    clearError 
+  } = useConversationService();
 
   const handleSendMessage = async () => {
     console.log('ChatPanel: handleSendMessage called with chatInput:', chatInput);
     if (!chatInput.trim()) return;
     
-    const userMessage = { 
-      type: 'user' as const, 
-      content: chatInput,
-      timestamp: new Date()
-    };
-    
-    setMessages(prev => [...prev, userMessage]);
-    setChatInput("");
-
-    // Check if the message looks like a search query - make it more specific
+    // Check if the message looks like a search query
     const searchKeywords = ['find', 'search', 'trending', 'popular'];
     const searchPhrases = ['find videos', 'search for', 'trending videos', 'popular videos'];
     
@@ -64,14 +54,13 @@ export const ChatPanel = ({
       chatInput.toLowerCase().includes(phrase)
     );
     
-    // Only treat as search if it has explicit search phrases, not just keywords
     const isSearchQuery = hasSearchPhrase || 
       (hasSearchKeyword && chatInput.toLowerCase().includes('videos'));
 
     console.log('ChatPanel: isSearchQuery:', isSearchQuery);
 
     if (isSearchQuery) {
-      // Extract search term (remove search keywords)
+      // Handle search queries
       const searchTerm = chatInput
         .toLowerCase()
         .replace(/\b(find|search|trending|viral|popular)\b/g, '')
@@ -80,74 +69,17 @@ export const ChatPanel = ({
       
       if (searchTerm) {
         await onSearch(searchTerm);
-        setMessages(prev => [...prev, {
-          type: 'assistant',
-          content: `Searching for "${searchTerm}"... I found ${videos.length} trending videos that match your query.`,
-          timestamp: new Date()
-        }]);
+        // Add search result message to conversation
+        await sendMessage(`I searched for "${searchTerm}" and found ${videos.length} trending videos.`);
       }
     } else {
-      console.log('ChatPanel: Generating AI content for non-search query');
-      // ALWAYS generate AI content for every chat message
-      // Get relevant video transcripts for context
-      const relevantVideos = videos.filter(video => 
-        selectedPlatforms.length === 0 || selectedPlatforms.includes(video.content_type)
-      );
-      
-      console.log('ChatPanel: relevantVideos:', relevantVideos.length);
-      
-      // Extract transcripts from relevant videos
-      const transcripts = relevantVideos.flatMap(video => [
-        video.title,
-        video.description
-      ]).filter(text => text && text.trim().length > 0);
-      
-      console.log('ChatPanel: transcripts:', transcripts);
-      
-      // Create AI generation request
-      const request: ContentGenerationRequest = {
-        userPrompt: chatInput,
-        systemPrompt: `You are an expert content strategist and social media consultant. 
-        The user is asking for help with content creation, strategy, or advice.
-        Provide helpful, actionable responses that are engaging and informative.
-        If they're asking for content ideas, provide structured content suggestions.
-        If they're asking for advice, give practical tips and strategies.
-        Always be encouraging and supportive while being realistic about what works on social media.`,
-        transcripts: transcripts,
-        platform: selectedPlatforms.length > 0 ? 
-          (selectedPlatforms[0] as any) : 'tiktok'
-      };
-
-      console.log('ChatPanel: AI request created:', request);
-
-      // Generate AI response
-      const generatedContent = await generateContent({
-        ...request,
-        user_prompt: request.userPrompt
-      });
-      console.log('ChatPanel: Generated content received:', generatedContent);
-      
-      if (generatedContent) {
-        // Check if this is a conversational response
-        const isConversational = generatedContent.hashtags.length === 0 && 
-          generatedContent.caption === 'This is a conversational response - no specific caption needed.';
-        
-        setMessages(prev => [...prev, {
-          type: 'assistant',
-          content: isConversational ? 
-            `Here's my response:` : 
-            `Here's your AI-generated content idea:`,
-          timestamp: new Date(),
-          generatedContent: generatedContent as any
-        }]);
-      } else {
-        setMessages(prev => [...prev, {
-          type: 'assistant',
-          content: `I'm having trouble generating a response right now. Please try again or check your API key.`,
-          timestamp: new Date()
-        }]);
-      }
+      // Use the conversation service for all other messages
+      // Pass the selected platforms and trending content to tailor the response
+      const platformNames = selectedPlatforms.map(platform => platform.toLowerCase());
+      await sendMessage(chatInput, platformNames, videos);
     }
+    
+    setChatInput("");
   };
 
   const toggleRecording = () => {
@@ -163,68 +95,145 @@ export const ChatPanel = ({
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  const copyToClipboard = async (text: string, sectionId: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedSections(prev => ({ ...prev, [sectionId]: true }));
+      setTimeout(() => {
+        setCopiedSections(prev => ({ ...prev, [sectionId]: false }));
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+    }
+  };
+
+  const cleanHashtags = (hashtags: string[]): string[] => {
+    return hashtags
+      .filter(tag => tag && tag.trim().length > 0)
+      .map(tag => tag.replace(/^#+/, '').trim())
+      .filter(tag => tag.length > 0 && !tag.includes('{') && !tag.includes('}') && !tag.includes('`'));
+  };
+
   const renderGeneratedContent = (content: ContentIdea) => {
-    // Check if this is a conversational response (no hashtags and generic caption)
-    const isConversational = content.hashtags.length === 0 && 
-      content.caption === 'This is a conversational response - no specific caption needed.';
+    console.log('ChatPanel: renderGeneratedContent called with:', content);
     
-    if (isConversational) {
+    // Check if this is a conversational response
+    const isConversational = (!content.hashtags || content.hashtags.length === 0) && 
+      (!content.caption || content.caption === 'This is a conversational response - no specific caption needed.');
+    
+    // Check if the content has meaningful structured data
+    const hasStructuredData = content.idea && content.idea !== 'No idea generated' &&
+      content.videoStructure && content.videoStructure !== 'No structure provided' &&
+      content.caption && content.caption !== 'No caption generated';
+
+    // Add safety checks for string splitting
+    if (content.idea && typeof content.idea === 'string' && content.idea.includes('"')) {
+      const ideaParts = content.idea.split('"');
+      content.idea = ideaParts.length > 1 ? ideaParts[1] : content.idea;
+    }
+    
+    if (content.videoStructure && typeof content.videoStructure === 'string' && content.videoStructure.includes('"')) {
+      const structureParts = content.videoStructure.split('"');
+      content.videoStructure = structureParts.length > 1 ? structureParts[1] : content.videoStructure;
+    }
+    
+    if (content.caption && typeof content.caption === 'string' && content.caption.includes('"')) {
+      const captionParts = content.caption.split('"');
+      content.caption = captionParts.length > 1 ? captionParts[1] : content.caption;
+    }
+        
+    if (isConversational || !hasStructuredData) {
       // For conversational responses, show the content in a simple format
+      const displayText = content.videoStructure.split('"')[1] || content.idea.split('"')[1] || content.caption.split('"')[1] || '';
+      if (!displayText) return null;
+      
       return (
-        <div className="mt-3">
-          <div className="bg-violet-500/10 border border-violet-500/20 rounded-lg p-3">
-            <p className="text-sm text-white/90 whitespace-pre-wrap">{content.videoStructure}</p>
+        <div className="mt-4">
+          <div className="bg-gradient-to-r from-violet-500/10 to-purple-500/10 border border-violet-500/20 rounded-lg p-4">
+            <p className="text-sm text-white/90 whitespace-pre-wrap leading-relaxed">{displayText}</p>
           </div>
         </div>
       );
     }
     
-    // For structured content, show all sections
+    // Clean hashtags before displaying
+    const cleanedHashtags = cleanHashtags(content.hashtags || []);
+    
+    // For structured content, show ONLY the cards without any initial text
     return (
-      <div className="mt-3 space-y-3">
-        {/* Idea */}
-        <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="h-4 w-4 text-blue-400" />
-            <span className="text-sm font-medium text-blue-300">IDEA</span>
-          </div>
-          <p className="text-sm text-white/90">{content.idea}</p>
-        </div>
-
-        {/* Video Structure */}
-        <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-3">
-          <div className="flex items-center gap-2 mb-2">
-            <Video className="h-4 w-4 text-purple-400" />
-            <span className="text-sm font-medium text-purple-300">VIDEO STRUCTURE</span>
-          </div>
-          <p className="text-sm text-white/90 whitespace-pre-wrap">{content.videoStructure}</p>
-        </div>
-
-        {/* Caption */}
-        <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3">
-          <div className="flex items-center gap-2 mb-2">
-            <MessageSquare className="h-4 w-4 text-green-400" />
-            <span className="text-sm font-medium text-green-300">CAPTION</span>
-          </div>
-          <p className="text-sm text-white/90">{content.caption}</p>
-        </div>
-
-        {/* Hashtags */}
-        {content.hashtags.length > 0 && (
-          <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-2">
-              <Hash className="h-4 w-4 text-orange-400" />
-              <span className="text-sm font-medium text-orange-300">HASHTAGS</span>
+      <div className="mt-4 space-y-4">
+        {/* Idea Section */}
+        {content.idea && content.idea !== 'No idea generated' && (
+          <div className="bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-lg p-4 group">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-blue-500/20 rounded-md">
+                  <Sparkles className="h-4 w-4 text-blue-400" />
+                </div>
+                <span className="text-sm font-semibold text-blue-300 uppercase tracking-wide">Content Idea</span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => copyToClipboard(content.idea, 'idea')}
+                className="opacity-0 group-hover:opacity-100 transition-opacity text-blue-400 hover:text-blue-300"
+              >
+                {copiedSections.idea ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </Button>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {content.hashtags.map((hashtag, index) => (
-                <Badge key={index} variant="secondary" className="bg-orange-500/20 text-orange-300 border-orange-500/30">
-                  #{hashtag}
-                </Badge>
-              ))}
+            <p className="text-sm text-white/90 leading-relaxed">{content.idea}</p>
+          </div>
+        )}
+
+        {/* Video Structure Section */}
+        {content.videoStructure && content.videoStructure !== 'No structure provided' && (
+          <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-lg p-4 group">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-purple-500/20 rounded-md">
+                  <Video className="h-4 w-4 text-purple-400" />
+                </div>
+                <span className="text-sm font-semibold text-purple-300 uppercase tracking-wide">Video Structure</span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => copyToClipboard(content.videoStructure, 'structure')}
+                className="opacity-0 group-hover:opacity-100 transition-opacity text-purple-400 hover:text-purple-300"
+              >
+                {copiedSections.structure ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+            <div className="text-sm text-white/90 leading-relaxed">
+              <p className="whitespace-pre-wrap">{content.videoStructure}</p>
             </div>
           </div>
         )}
+
+        {/* Caption Section */}
+        {content.caption && content.caption !== 'No caption generated' && (
+          <div className="bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-lg p-4 group">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-green-500/20 rounded-md">
+                  <MessageSquare className="h-4 w-4 text-green-400" />
+                </div>
+                <span className="text-sm font-semibold text-green-300 uppercase tracking-wide">Caption</span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => copyToClipboard(content.caption, 'caption')}
+                className="opacity-0 group-hover:opacity-100 transition-opacity text-green-400 hover:text-green-300"
+              >
+                {copiedSections.caption ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+            <p className="text-sm text-white/90 leading-relaxed">{content.caption}</p>
+          </div>
+        )}
+
+
       </div>
     );
   };
@@ -232,16 +241,37 @@ export const ChatPanel = ({
   return (
     <Card className="h-full bg-black/40 backdrop-blur-xl border-zinc-800/50 shadow-2xl">
       <CardHeader className="border-b border-zinc-800/50 pb-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-gradient-to-r from-violet-500 to-purple-500 rounded-lg">
-            <Bot className="w-5 h-5 text-white" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-r from-violet-500 to-purple-500 rounded-lg">
+              <Bot className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-white">AI Content Assistant</h2>
+              <p className="text-sm text-zinc-400">
+                {messages.length > 0 ? `${messages.length} messages` : 'Tell us your idea or upload a video'}
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-lg font-semibold text-white">AI Content Assistant</h2>
-            <p className="text-sm text-zinc-400">
-              {videos.length > 0 ? `${videos.length} videos found` : 'Tell us your idea or upload a video'}
-            </p>
-          </div>
+          
+          {/* Conversation Context Badge */}
+          {conversationContext.current_intent && (
+            <Badge variant="secondary" className="bg-violet-500/20 text-violet-300 border-violet-500/30">
+              {conversationContext.current_intent.replace('_', ' ')}
+            </Badge>
+          )}
+          
+          {/* Clear Conversation Button */}
+          {messages.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearConversation}
+              className="text-zinc-400 hover:text-white hover:bg-zinc-800/50"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          )}
         </div>
       </CardHeader>
 
@@ -255,7 +285,7 @@ export const ChatPanel = ({
               </div>
               <h3 className="text-lg font-medium text-white mb-2">Ready to go viral?</h3>
               <p className="text-sm text-zinc-400 max-w-sm">
-                Share your content idea, search for trending videos, or say "generate content" to create AI-powered posts.
+                Share your content idea, search for trending videos, or ask for advice. I'll remember our conversation and provide contextual responses.
               </p>
               {videos.length > 0 && (
                 <div className="mt-4 p-3 bg-white/5 rounded-lg">
@@ -275,7 +305,7 @@ export const ChatPanel = ({
               <div
                 key={index}
                 className={cn(
-                  "flex gap-3 max-w-[85%]",
+                  "flex gap-3 max-w-[90%]",
                   message.type === 'user' ? "ml-auto flex-row-reverse" : ""
                 )}
               >
@@ -292,17 +322,23 @@ export const ChatPanel = ({
                   )}
                 </div>
                 <div className={cn(
-                  "rounded-2xl px-4 py-3 shadow-lg",
+                  "rounded-2xl px-4 py-3 shadow-lg flex-1",
                   message.type === 'user'
                     ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
                     : "bg-zinc-800/50 text-zinc-100 border border-zinc-700/30"
                 )}>
-                  <p className="text-sm leading-relaxed">{message.content}</p>
+                  {/* Only show message content if there's no structured content, or if it's a user message */}
+                  {(message.type === 'user' || !message.structuredContent) && (
+                    <p className="text-sm leading-relaxed">{message.content}</p>
+                  )}
                   
                   {/* Render generated content if available */}
-                  {message.generatedContent && renderGeneratedContent(message.generatedContent)}
+                  {message.structuredContent && (() => {
+                    console.log('ChatPanel: Rendering structured content for message:', message.structuredContent);
+                    return renderGeneratedContent(message.structuredContent);
+                  })()}
                   
-                  <div className="text-xs opacity-60 mt-1">
+                  <div className="text-xs opacity-60 mt-2">
                     {formatTime(message.timestamp)}
                   </div>
                 </div>
@@ -312,14 +348,14 @@ export const ChatPanel = ({
 
           {/* AI Loading Indicator */}
           {loading && (
-            <div className="flex items-center gap-3 max-w-[85%]">
+            <div className="flex items-center gap-3 max-w-[90%]">
               <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-to-r from-violet-500 to-purple-500">
                 <Bot className="w-4 h-4 text-white" />
               </div>
               <div className="rounded-2xl px-4 py-3 shadow-lg bg-zinc-800/50 text-zinc-100 border border-zinc-700/30">
                 <div className="flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin text-violet-400" />
-                  <span className="text-sm">Generating AI content...</span>
+                  <span className="text-sm">Processing your message...</span>
                 </div>
               </div>
             </div>
@@ -327,12 +363,22 @@ export const ChatPanel = ({
 
           {/* Error Display */}
           {error && (
-            <div className="flex items-center gap-3 max-w-[85%]">
+            <div className="flex items-center gap-3 max-w-[90%]">
               <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-to-r from-red-500 to-pink-500">
                 <Bot className="w-4 h-4 text-white" />
               </div>
               <div className="rounded-2xl px-4 py-3 shadow-lg bg-red-500/10 text-red-100 border border-red-500/30">
-                <p className="text-sm">Error: {error}</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm">Error: {error}</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearError}
+                    className="text-red-300 hover:text-red-100"
+                  >
+                    ×
+                  </Button>
+                </div>
               </div>
             </div>
           )}
@@ -371,9 +417,15 @@ export const ChatPanel = ({
             <Textarea
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
-              placeholder="Describe your content idea, search for trends, or say 'generate content'..."
+              placeholder="Describe your content idea, search for trends, or ask for advice..."
               className="bg-zinc-900/50 border-zinc-700 text-white placeholder:text-zinc-500 resize-none focus:border-violet-500/50 focus:ring-violet-500/20"
               rows={2}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
+              }}
             />
             <Button
               onClick={handleSendMessage}
