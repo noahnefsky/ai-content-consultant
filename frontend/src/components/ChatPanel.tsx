@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { Video as VideoType, ContentType } from "@/hooks/use-videos";
 import { useAIService } from "@/hooks/use-ai-service";
 import { ContentGenerationRequest, ContentIdea } from "../../../services/ai-content-service";
+import { useGeminiService } from "@/hooks/use-gemini-service";
 
 interface ChatPanelProps {
   chatInput: string;
@@ -34,7 +35,9 @@ export const ChatPanel = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Use the unified AI service
-  const { generateCustomContent, aiLoading, aiError } = useAIService();
+  // const { generateCustomContent, aiLoading, aiError } = useAIService();
+
+  const { generateContent, loading, error, lastResponse } = useGeminiService();
 
   const handleSendMessage = async () => {
     console.log('ChatPanel: handleSendMessage called with chatInput:', chatInput);
@@ -118,7 +121,10 @@ export const ChatPanel = ({
       console.log('ChatPanel: AI request created:', request);
 
       // Generate AI response
-      const generatedContent = await generateCustomContent(request);
+      const generatedContent = await generateContent({
+        ...request,
+        user_prompt: request.userPrompt
+      });
       console.log('ChatPanel: Generated content received:', generatedContent);
       
       if (generatedContent) {
@@ -132,7 +138,7 @@ export const ChatPanel = ({
             `Here's my response:` : 
             `Here's your AI-generated content idea:`,
           timestamp: new Date(),
-          generatedContent
+          generatedContent: generatedContent as any
         }]);
       } else {
         setMessages(prev => [...prev, {
@@ -305,7 +311,7 @@ export const ChatPanel = ({
           )}
 
           {/* AI Loading Indicator */}
-          {aiLoading && (
+          {loading && (
             <div className="flex items-center gap-3 max-w-[85%]">
               <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-to-r from-violet-500 to-purple-500">
                 <Bot className="w-4 h-4 text-white" />
@@ -320,13 +326,13 @@ export const ChatPanel = ({
           )}
 
           {/* Error Display */}
-          {aiError && (
+          {error && (
             <div className="flex items-center gap-3 max-w-[85%]">
               <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-to-r from-red-500 to-pink-500">
                 <Bot className="w-4 h-4 text-white" />
               </div>
               <div className="rounded-2xl px-4 py-3 shadow-lg bg-red-500/10 text-red-100 border border-red-500/30">
-                <p className="text-sm">Error: {aiError}</p>
+                <p className="text-sm">Error: {error}</p>
               </div>
             </div>
           )}
@@ -371,10 +377,10 @@ export const ChatPanel = ({
             />
             <Button
               onClick={handleSendMessage}
-              disabled={!chatInput.trim() || aiLoading}
+              disabled={!chatInput.trim() || loading}
               className="bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white shadow-lg"
             >
-              {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             </Button>
           </div>
           
