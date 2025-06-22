@@ -2,6 +2,8 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 from datetime import datetime
 from enum import Enum
+from pydantic import BaseModel, Field
+from typing import Optional, List
 
 class Platform(str, Enum):
     TIKTOK = "tiktok"
@@ -167,3 +169,15 @@ class CodeExecutionResult(BaseModel):
     output: Optional[str] = None
     error: Optional[str] = None
     status_code: int # 0: success, 1: runtime error, 2: timeout, 3: internal error 
+
+class ContentGenerationRequest(BaseModel):
+    """Request model for content generation."""
+
+    user_prompt: str = Field(..., description="User's content idea or prompt")
+    system_prompt: Optional[str] = Field(None, description="Custom system prompt")
+    transcripts: Optional[List[str]] = Field(
+        default_factory=list, description="Viral transcripts for context"
+    )
+    platform: Optional[str] = Field(
+        None, description="Target platform (tiktok, instagram, youtube, twitter)"
+    )

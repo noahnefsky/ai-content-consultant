@@ -36,11 +36,13 @@ When responding to users:
 
 For content generation requests, structure your response with:
 1. IDEA: A clear, compelling concept that can go viral
-2. VIDEO STRUCTURE: Step-by-step breakdown of how to film/edit the content
+2. VIDEO STRUCTURE: Overall structure and flow of the video (not step-by-step instructions)
 3. CAPTION: Engaging caption that complements the video
 4. HASHTAGS: Relevant, trending hashtags for maximum reach
 
-For general questions and advice, respond naturally and conversationally.`;
+For general questions and advice, respond naturally and conversationally.
+
+IMPORTANT: For VIDEO STRUCTURE, provide the overall concept and flow, not detailed step-by-step filming instructions. Focus on the narrative arc, key moments, and overall structure that will engage viewers.`;
 
 export class AIContentService {
   private genAI: GoogleGenerativeAI | null = null;
@@ -144,11 +146,7 @@ Remember, authentic content that helps people will always perform better than tr
       success: true,
       content: {
         idea: `Viral ${request.platform || 'social media'} content idea based on "${request.userPrompt}"`,
-        videoStructure: `1. Hook: Start with an attention-grabbing opening
-2. Problem: Present the issue your audience faces
-3. Solution: Show how your content solves it
-4. Value: Provide actionable tips or insights
-5. Call to Action: Encourage engagement and follows`,
+        videoStructure: `This video follows a compelling narrative arc that hooks viewers from the start and keeps them engaged throughout. The structure builds from an attention-grabbing opening that immediately addresses the viewer's pain point, transitions into presenting the problem in a relatable way, then delivers the solution with clear value. The video concludes with a strong call-to-action that encourages engagement and follows. The overall flow is designed to maximize watch time and sharing potential.`,
         caption: `🔥 ${request.userPrompt} - This changed everything for me! 
 
 What's your biggest challenge with this? Drop a ❤️ if you agree!
@@ -183,7 +181,7 @@ Please provide your response in the following structured format:
 
 IDEA: [Your viral content idea here]
 
-VIDEO STRUCTURE: [Step-by-step breakdown of how to create this content]
+VIDEO STRUCTURE: [Overall structure and flow of the video]
 
 CAPTION: [Engaging caption that will drive engagement]
 
