@@ -120,4 +120,8 @@ $RECYCLE.BIN/
 *.msix
 *.msm
 *.msp
-*.lnk 
+*.lnk
+
+# Project datasets and large media – keep out of Git
+backend/service/scraping-service/data/
+backend/service/scraping-service/test_output/ 

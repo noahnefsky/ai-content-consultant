@@ -1,28 +1,26 @@
 # Vector Database
-qdrant-client==1.7.0
-# chromadb==0.4.15  # Removing ChromaDB
+qdrant-client
 
-# Multimodal Embeddings
-sentence-transformers==2.2.2
-transformers==4.36.0
-torch==2.1.0
-torchvision==0.16.0
-clip-by-openai==1.0
+# Multimodal Embeddings - Compatible versions that work together
+sentence-transformers>=2.0.0
+transformers>=4.0.0
+torch>=2.0.0
+torchvision>=0.15.0
+# Use official OpenAI CLIP implementation instead of problematic clip-by-openai
+git+https://github.com/openai/CLIP.git
 
 # Social Media APIs
-instaloader==4.10.3
-tweepy==4.14.0
-tiktokapi==0.0.1
-requests==2.31.0
-selenium==4.15.0
+instaloader
+tweepy
+requests
+selenium
 
 # Data Processing
-pandas==2.1.3
-numpy==1.24.3
-pillow==10.1.0
-opencv-python==4.8.1.78
+pandas
+numpy
+pillow
+opencv-python
 
 # Utilities
-python-dotenv==1.0.0
-asyncio==3.4.3
-aiohttp==3.9.1 
+python-dotenv
+aiohttp>=3.9.0 

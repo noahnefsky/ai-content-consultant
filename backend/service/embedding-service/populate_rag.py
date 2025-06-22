@@ -2,17 +2,20 @@
 """
 AI Content Consultant - Multimodal RAG Population Script
 Fetches real data from TikTok, Instagram, and Twitter with multimodal support
+
+Note: For hackathon trending video discovery, use the new scraping-service instead.
+This file focuses on building RAG embeddings for content analysis.
 """
 
-import os
-import asyncio
-import aiohttp
+import os, sys, json, asyncio
 from datetime import datetime, timedelta
-import uuid
-import logging
+import uuid, logging
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
-import json
+import aiohttp
+from PIL import Image
+import requests
+from io import BytesIO
 
 # Vector Database & Embeddings
 from qdrant_client import QdrantClient
@@ -20,9 +23,10 @@ from qdrant_client.models import Distance, VectorParams, PointStruct
 import clip
 import torch
 from sentence_transformers import SentenceTransformer
-from PIL import Image
-import requests
-from io import BytesIO
+import pandas as pd
+import numpy as np
+import cv2
+from dotenv import load_dotenv
 
 # Social Media APIs
 import instaloader
@@ -32,10 +36,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 
 # Data processing
-import pandas as pd
-import numpy as np
-import cv2
-from dotenv import load_dotenv
+from pathlib import Path
 
 # Load environment variables
 load_dotenv()
@@ -279,33 +280,6 @@ class SocialMediaFetcher:
         
         return posts
     
-    async def fetch_tiktok_posts(self, hashtags: List[str], limit: int = 50) -> List[MultimodalPost]:
-        """Fetch TikTok posts using web scraping (API is restricted)"""
-        posts = []
-        
-        if not self.driver:
-            logger.warning("Selenium not available. Skipping TikTok data.")
-            return posts
-        
-        try:
-            for hashtag in hashtags:
-                url = f"https://www.tiktok.com/tag/{hashtag}"
-                self.driver.get(url)
-                
-                # Wait for content to load
-                await asyncio.sleep(3)
-                
-                # Extract post data (simplified - real implementation would be more complex)
-                # This is a placeholder for TikTok scraping logic
-                # You'd need to handle TikTok's dynamic loading and anti-bot measures
-                
-                logger.info(f"TikTok scraping for #{hashtag} - placeholder implementation")
-                
-        except Exception as e:
-            logger.error(f"Error fetching TikTok posts: {e}")
-        
-        return posts
-    
     def extract_hashtags(self, text: str) -> List[str]:
         """Extract hashtags from text"""
         import re
@@ -348,8 +322,28 @@ class SocialMediaFetcher:
 class MultimodalVectorDB:
     """Qdrant-based multimodal vector database"""
     
-    def __init__(self, host: str = "localhost", port: int = 6333):
-        self.client = QdrantClient(host=host, port=port)
+    def __init__(self, host: str = "localhost", port: int = 6333, url: str = None, api_key: str = None):
+        """Initialize Qdrant client.
+
+        Priority:
+        1. Explicit `url` argument (managed Qdrant Cloud) – optional `api_key`.
+        2. Environment variables `QDRANT_URL` and optional `QDRANT_API_KEY`.
+        3. Fallback to local host/port (default).
+        """
+
+        # Resolve connection settings with sensible fallbacks
+        url = url or os.getenv("QDRANT_URL")
+        api_key = api_key or os.getenv("QDRANT_API_KEY")
+
+        if url:
+            # Managed / remote Qdrant instance
+            self.client = QdrantClient(url=url, api_key=api_key)
+            logger.info(f"🔗 Connected to managed Qdrant instance: {url}")
+        else:
+            # Local Qdrant instance via host/port
+            self.client = QdrantClient(host=host, port=port)
+            logger.info(f"💾 Connected to local Qdrant instance at {host}:{port}")
+
         self.collection_name = "viral_multimodal_posts"
         self.embedder = MultimodalEmbedder()
         
@@ -381,19 +375,30 @@ class MultimodalVectorDB:
             
             # Visual embedding (image or video)
             visual_embedding = None
-            if post.media_url:
-                if post.content_type == 'image':
-                    visual_embedding = self.embedder.encode_image(post.media_url)
-                elif post.content_type == 'video':
-                    visual_embedding = self.embedder.encode_video_frame(post.media_url)
+            if post.content_type == 'image' and post.media_url:
+                visual_embedding = self.embedder.encode_image(post.media_url)
+            elif post.content_type == 'video':
+                source = post.media_path or post.media_url
+                if source:
+                    visual_embedding = self.embedder.encode_video_frame(source)
             
             # Create default visual embedding if none available
             if visual_embedding is None:
                 visual_embedding = [0.0] * 512  # CLIP embedding size
             
-            # Create point for Qdrant
+            # Qdrant requires point IDs to be unsigned integers or UUID strings.
+            # Convert purely numeric IDs to int; otherwise keep original string/UUID.
+            point_id: Any
+            if isinstance(post.id, str) and post.id.isdigit():
+                try:
+                    point_id = int(post.id)
+                except ValueError:
+                    point_id = str(uuid.uuid4())
+            else:
+                point_id = post.id if isinstance(post.id, (int, str)) else str(post.id)
+
             point = PointStruct(
-                id=post.id,
+                id=point_id,
                 vector={
                     "text": text_embedding,
                     "visual": visual_embedding
@@ -466,26 +471,116 @@ async def main():
     
     all_posts = []
     
-    # Fetch data from each platform
-    logger.info("🔄 Fetching data from social media platforms...")
+    # We're only using TikTok data from the scraping service
+    logger.info("🔄 Loading TikTok data from scraping service...")
     
-    # Twitter
-    logger.info("📱 Fetching Twitter posts...")
-    twitter_posts = await fetcher.fetch_twitter_posts(trending_hashtags[:5], limit=20)
-    all_posts.extend(twitter_posts)
-    logger.info(f"✅ Fetched {len(twitter_posts)} Twitter posts")
+    # -------------------------------------------------------------
+    # TikTok from individual data/*.json files (with rich metadata)
+    # -------------------------------------------------------------
     
-    # Instagram
-    logger.info("📸 Fetching Instagram posts...")
-    instagram_posts = await fetcher.fetch_instagram_posts(trending_hashtags[:5], limit=20)
-    all_posts.extend(instagram_posts)
-    logger.info(f"✅ Fetched {len(instagram_posts)} Instagram posts")
+    def load_tiktok_data_files() -> List[MultimodalPost]:
+        """Load individual *.json files from scraping-service/data/ folder."""
+        
+        scrape_data_dir = Path(__file__).resolve().parents[1] / "scraping-service" / "data"
+        posts: List[MultimodalPost] = []
+        
+        if not scrape_data_dir.exists():
+            logger.warning(f"⚠️  Data directory not found: {scrape_data_dir}")
+            return posts
+        
+        # Get all individual JSON files (exclude manifest files)
+        json_files = [f for f in scrape_data_dir.glob("*.json") if "manifest" not in f.name]
+        
+        if not json_files:
+            logger.warning(f"⚠️  No individual JSON files found in {scrape_data_dir}")
+            return posts
+        
+        def classify_content_from_hashtags(hashtags: List[str]) -> str:
+            """Simple content classification using hashtags."""
+            if not hashtags:
+                return "general"
+            
+            # Filter out generic hashtags and use meaningful ones
+            meaningful_hashtags = [
+                tag for tag in hashtags 
+                if tag not in ['fyp', 'foryou', 'viral', 'trending', 'tiktok', 'xyzbca', 'blowthisup', 'capcut', 'makeitviral']
+                and len(tag) > 2
+            ]
+            
+            if meaningful_hashtags:
+                # Use the first meaningful hashtag as category
+                return meaningful_hashtags[0]
+            
+            return "general"
+        
+        logger.info(f"📁 Processing {len(json_files)} individual TikTok data files...")
+        
+        for json_file in json_files:
+            try:
+                with open(json_file, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+                
+                # Extract data from the rich metadata format
+                video_id = meta.get("video_id", "")
+                if not video_id:
+                    continue
+                
+                views = meta.get("views", 0)
+                likes = meta.get("likes", 0)
+                comments = meta.get("comments", 0)
+                shares = meta.get("shares", 0)
+                engagement_rate = (
+                    (likes + comments + shares) / views * 100 if views > 0 else 0.0
+                )
+                
+                # Parse created_at
+                created_at_str = meta.get("created_at", "")
+                try:
+                    if created_at_str:
+                        posted_at = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
+                    else:
+                        posted_at = datetime.now()
+                except:
+                    posted_at = datetime.now()
+                
+                # Check if video file exists
+                file_path = meta.get("file_path", "")
+                video_file_path = None
+                if file_path:
+                    full_video_path = scrape_data_dir / Path(file_path).name
+                    if full_video_path.exists():
+                        video_file_path = str(full_video_path)
+                
+                post = MultimodalPost(
+                    id=video_id,
+                    platform="tiktok",
+                    content_type="video",
+                    text=meta.get("description", ""),
+                    media_url=meta.get("thumbnail_url", ""),
+                    media_path=video_file_path,
+                    hashtags=meta.get("hashtags", []),
+                    author=meta.get("creator", ""),
+                    views=views,
+                    likes=likes,
+                    shares=shares,
+                    comments=comments,
+                    engagement_rate=engagement_rate,
+                    posted_at=posted_at,
+                    category=classify_content_from_hashtags(meta.get("hashtags", [])),
+                )
+                posts.append(post)
+                
+                logger.debug(f"✅ Loaded: {video_id} - {meta.get('title', '')[:50]}...")
+                
+            except Exception as e:
+                logger.warning(f"Failed to parse {json_file.name}: {e}")
+        
+        return posts
     
-    # TikTok (placeholder - more complex implementation needed)
-    logger.info("🎵 Fetching TikTok posts...")
-    tiktok_posts = await fetcher.fetch_tiktok_posts(trending_hashtags[:3], limit=10)
+    logger.info("🎵 Loading TikTok data from individual JSON files...")
+    tiktok_posts = load_tiktok_data_files()
     all_posts.extend(tiktok_posts)
-    logger.info(f"✅ Fetched {len(tiktok_posts)} TikTok posts")
+    logger.info(f"✅ Loaded {len(tiktok_posts)} TikTok posts with rich metadata")
     
     # Add posts to vector database
     if all_posts:
@@ -514,9 +609,10 @@ async def main():
     
     logger.info(f"\n🎉 Multimodal RAG setup complete!")
     logger.info(f"   Total posts indexed: {len(all_posts)}")
-    logger.info(f"   Platforms: Twitter, Instagram, TikTok")
+    logger.info(f"   Platform: TikTok (with rich metadata)")
     logger.info(f"   Database: Qdrant multimodal collection")
     logger.info(f"   Embeddings: CLIP (visual) + SentenceTransformer (text)")
 
 if __name__ == "__main__":
+    print("Starting RAG population...")
     asyncio.run(main()) 
