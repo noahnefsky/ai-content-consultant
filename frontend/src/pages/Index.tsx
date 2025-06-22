@@ -1,12 +1,15 @@
 import { useState, useEffect } from "react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ChatPanel } from "@/components/ChatPanel";
 import { TrendPanel } from "@/components/TrendPanel";
+import { MediaTransformPanel } from "@/components/MediaTransformPanel";
 import { PlatformSelector } from "@/components/PlatformSelector";
 import { useVideos, ContentType } from "@/hooks/use-videos";
 
 const Index = () => {
   const [selectedPlatforms, setSelectedPlatforms] = useState<ContentType[]>([]);
   const [chatInput, setChatInput] = useState("");
+  const [activeTab, setActiveTab] = useState("trends");
   
   const {
     videos,
@@ -65,30 +68,57 @@ const Index = () => {
         </div>
       </header>
 
-      {/* Main Layout - Two Panels */}
+      {/* Main Layout - Tabs */}
       <div className="flex-1 container mx-auto px-6 py-6 overflow-hidden">
-        <div className="grid grid-cols-2 gap-6 h-full">
-          {/* Trend Panel - Left Side */}
-          <div className="col-span-1 overflow-hidden">
-            <TrendPanel 
-              videos={videos}
-              loading={loading}
-              error={error}
-              onSearch={handleSearch}
-            />
-          </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
+          <TabsList className="grid w-full grid-cols-2 bg-zinc-900/50 border border-zinc-800">
+            <TabsTrigger 
+              value="trends" 
+              className="data-[state=active]:bg-zinc-800 data-[state=active]:text-white text-zinc-400"
+            >
+              Trending Content
+            </TabsTrigger>
+            <TabsTrigger 
+              value="transform" 
+              className="data-[state=active]:bg-zinc-800 data-[state=active]:text-white text-zinc-400"
+            >
+              Media Transformer
+            </TabsTrigger>
+          </TabsList>
 
-          {/* Chat Panel - Right Side */}
-          <div className="col-span-1 overflow-hidden">
-            <ChatPanel 
-              chatInput={chatInput}
-              setChatInput={setChatInput}
-              selectedPlatforms={selectedPlatforms}
-              onSearch={handleSearch}
-              videos={videos}
-            />
+          <div className="flex-1 mt-6 overflow-hidden">
+            <TabsContent value="trends" className="h-full m-0">
+              <div className="grid grid-cols-2 gap-6 h-full">
+                {/* Trend Panel - Left Side */}
+                <div className="col-span-1 overflow-hidden">
+                  <TrendPanel 
+                    videos={videos}
+                    loading={loading}
+                    error={error}
+                    onSearch={handleSearch}
+                  />
+                </div>
+
+                {/* Chat Panel - Right Side */}
+                <div className="col-span-1 overflow-hidden">
+                  <ChatPanel 
+                    chatInput={chatInput}
+                    setChatInput={setChatInput}
+                    selectedPlatforms={selectedPlatforms}
+                    onSearch={handleSearch}
+                    videos={videos}
+                  />
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="transform" className="h-full m-0">
+              <div className="h-full">
+                <MediaTransformPanel />
+              </div>
+            </TabsContent>
           </div>
-        </div>
+        </Tabs>
       </div>
     </div>
   );

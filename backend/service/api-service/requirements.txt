@@ -1,16 +1,24 @@
 fastapi==0.104.1
 pydantic==2.5.0
 uvicorn==0.24.0
-python-multipart
+python-multipart>=0.0.7
 httpx
 google-cloud-firestore
 python-jose[cryptography]
 passlib[bcrypt]
 google-generativeai==0.3.0
 python-dotenv==1.0.0
+
+# Langchain / graphs
 langgraph==0.2.0
 
-# Multimodal RAG dependencies
+# ── NEW: video + transcription ───────────────────────────────
+assemblyai>=0.30.0
+moviepy==1.0.3
+imageio-ffmpeg>=0.6.0
+typing-extensions>=4.8.0        # required by pydantic / moviepy
+
+# ── Multimodal RAG dependencies ──────────────────────────────
 qdrant-client
 cohere
 opencv-python-headless
