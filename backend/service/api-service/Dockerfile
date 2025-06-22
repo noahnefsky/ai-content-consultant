@@ -12,15 +12,18 @@ ENV PORT=8080
 # Create a non-root user
 RUN groupadd -r appuser && useradd --no-log-init -r -g appuser appuser
 
-# Install system dependencies
+# Install system dependencies (curl for health checks, libGL & libglib for OpenCV)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    libgl1 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy and install Python dependencies
-COPY requirements.txt .
+COPY requirements.txt ./
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt && \
+    pip cache purge
 
 # Copy application code
 COPY *.py ./

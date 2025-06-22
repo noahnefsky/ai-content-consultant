@@ -20,47 +20,76 @@ import uuid
 
 import numpy as np
 import requests
-from PIL import Image
 import cv2
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
 
-from sentence_transformers import SentenceTransformer
-import torch
-import clip
 import cohere
 
 logger = logging.getLogger(__name__)
 
 
-class _MultimodalEmbedder:
-    """Lightweight wrapper around CLIP + SentenceTransformers."""
+class _HuggingFaceEmbedder:
+    """Embedder that calls Hugging Face Inference API for text & image embeddings."""
 
     def __init__(self):
-        logger.info("🔌 Loading text & visual encoders for retrieval…")
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.text_model = SentenceTransformer("all-MiniLM-L6-v2")
-        self.clip_model, self.clip_preprocess = clip.load("ViT-B/32", device=self.device)
-        logger.info("✅ Encoders ready (device=%s)", self.device)
+        self.api_token = os.getenv("HF_API_TOKEN") or os.getenv("HUGGINGFACE_API_TOKEN")
+        if not self.api_token:
+            raise RuntimeError("HF_API_TOKEN env var is required for remote embedding")
 
+        self.headers = {
+            "Authorization": f"Bearer {self.api_token}",
+            "Accept": "application/json",
+        }
+
+        # Allow overriding the endpoints via env for custom endpoints
+        self.text_endpoint = os.getenv(
+            "HF_TEXT_ENDPOINT",
+            "https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2",
+        )
+        self.image_endpoint = os.getenv(
+            "HF_IMAGE_ENDPOINT",
+            "https://api-inference.huggingface.co/models/openai/clip-vit-base-patch32",
+        )
+
+        logger.info("🔗 Using Hugging Face Inference API for embeddings")
+
+    # --------------------------- helpers ---------------------------
+    def _post_json(self, url: str, payload: Dict[str, Any]):
+        resp = requests.post(url, headers=self.headers, json=payload, timeout=30)
+        resp.raise_for_status()
+        return resp.json()
+
+    # --------------------------- public ----------------------------
     def encode_text(self, text: str) -> List[float]:
-        return self.text_model.encode(text).tolist()
+        try:
+            data = self._post_json(self.text_endpoint, {"inputs": text})
+            # HF returns [ [emb] ]
+            if data and isinstance(data[0], list):
+                return data[0]
+            return data
+        except Exception as e:
+            logger.error("HF text embedding failed: %s", e)
+            return None
+
+    def _get_image_bytes(self, path_or_url: str) -> bytes:
+        if path_or_url.startswith("http"):
+            return requests.get(path_or_url, timeout=15).content
+        with open(path_or_url, "rb") as f:
+            return f.read()
 
     def encode_image(self, image_url_or_path: str) -> Optional[List[float]]:
         try:
-            if image_url_or_path.startswith("http"):
-                resp = requests.get(image_url_or_path, timeout=10)
-                img = Image.open(BytesIO(resp.content))
-            else:
-                img = Image.open(image_url_or_path)
-            inp = self.clip_preprocess(img).unsqueeze(0).to(self.device)
-            with torch.no_grad():
-                feats = self.clip_model.encode_image(inp)
-                feats = feats / feats.norm(dim=-1, keepdim=True)
-            return feats.cpu().numpy().flatten().tolist()
+            img_bytes = self._get_image_bytes(image_url_or_path)
+            resp = requests.post(self.image_endpoint, headers=self.headers, data=img_bytes, timeout=60)
+            resp.raise_for_status()
+            data = resp.json()
+            if data and isinstance(data[0], list):
+                return data[0]
+            return data
         except Exception as e:
-            logger.warning("encode_image failed: %s", e)
+            logger.warning("HF image embedding failed: %s", e)
             return None
 
     def encode_video_frame(self, video_path: str, frame_time: int = 5) -> Optional[List[float]]:
@@ -70,16 +99,19 @@ class _MultimodalEmbedder:
             ret, frame = cap.read()
             if not ret:
                 return None
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            img = Image.fromarray(frame_rgb)
-            inp = self.clip_preprocess(img).unsqueeze(0).to(self.device)
-            with torch.no_grad():
-                feats = self.clip_model.encode_image(inp)
-                feats = feats / feats.norm(dim=-1, keepdim=True)
-            cap.release()
-            return feats.cpu().numpy().flatten().tolist()
+            # Encode frame as JPEG into memory
+            success, buf = cv2.imencode(".jpg", frame)
+            if not success:
+                return None
+            img_bytes = buf.tobytes()
+            resp = requests.post(self.image_endpoint, headers=self.headers, data=img_bytes, timeout=60)
+            resp.raise_for_status()
+            data = resp.json()
+            if data and isinstance(data[0], list):
+                return data[0]
+            return data
         except Exception as e:
-            logger.warning("encode_video_frame failed: %s", e)
+            logger.warning("HF video frame embedding failed: %s", e)
             return None
 
 
@@ -102,7 +134,7 @@ class MultimodalRetriever:
             self.client = QdrantClient(host=host, port=port)
             logger.info("💾 Using local Qdrant at %s:%s", host, port)
 
-        self.embedder = _MultimodalEmbedder()
+        self.embedder = _HuggingFaceEmbedder()
 
         # Cohere client (optional)
         self.cohere_api_key = os.getenv("COHERE_API_KEY")
@@ -131,6 +163,20 @@ class MultimodalRetriever:
         else:
             vector = self.embedder.encode_text(query_text)
             vector_name = "text"
+
+        # If embedding failed, fall back to returning top posts (scroll)
+        if not vector or (isinstance(vector, list) and len(vector) == 0):
+            logger.warning("Embedding failed – falling back to generic scroll for top posts")
+            try:
+                hits, _ = self.client.scroll(
+                    collection_name=self.collection_name,
+                    limit=top_k,
+                    with_payload=True,
+                )
+                return [h.payload for h in hits]
+            except Exception as e:
+                logger.error("Scroll fallback failed: %s", e)
+                return []
 
         results = self.client.search(
             collection_name=self.collection_name,

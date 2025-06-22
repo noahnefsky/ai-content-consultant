@@ -3,32 +3,34 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args: [
         'build',
-        '-t', 'us-east1-docker.pkg.dev/ai-content-consultant/${_ARTIFACT_REGISTRY_REPO_ID}/api-service:latest',
+        '-t', '${_GCP_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO_ID}/api-service:latest',
         '.'
       ]
 
   # Push the image to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'us-east1-docker.pkg.dev/ai-content-consultant/${_ARTIFACT_REGISTRY_REPO_ID}/api-service:latest']
+    args: ['push', '${_GCP_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO_ID}/api-service:latest']
 
   # Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args: [
         'run', 'deploy', 'api-service',
-        '--image', 'us-east1-docker.pkg.dev/ai-content-consultant/${_ARTIFACT_REGISTRY_REPO_ID}/api-service:latest',
+        '--image', '${_GCP_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO_ID}/api-service:latest',
         '--region', '${_GCP_REGION}',
         '--platform', 'managed',
+        '--project', '${_PROJECT_ID}',
         '--quiet'
       ]
 
 # Default substitutions
 substitutions:
+  _PROJECT_ID: 'ai-content-consultant'
   _ARTIFACT_REGISTRY_REPO_ID: 'ai-content-consultant-repo'
   _GCP_REGION: 'us-east1'
 
 images:
-  - 'us-east1-docker.pkg.dev/ai-content-consultant/${_ARTIFACT_REGISTRY_REPO_ID}/api-service:latest'
+  - '${_GCP_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO_ID}/api-service:latest'
 
 options:
   logging: CLOUD_LOGGING_ONLY 

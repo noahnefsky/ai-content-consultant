@@ -59,6 +59,53 @@ resource "google_project_iam_member" "monitoring_writer" {
   member  = "serviceAccount:${google_service_account.api_service_sa.email}"
 }
 
+# Get the project number for Cloud Build service account
+data "google_project" "project" {
+  project_id = var.project_id
+}
+
+# Grant Cloud Build service account admin permissions for Artifact Registry
+resource "google_project_iam_member" "cloudbuild_artifactregistry_admin" {
+  project = var.project_id
+  role    = "roles/artifactregistry.admin"
+  member  = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
+}
+
+# Grant Cloud Build service account admin permissions for Cloud Run
+resource "google_project_iam_member" "cloudbuild_run_admin" {
+  project = var.project_id
+  role    = "roles/run.admin"
+  member  = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
+}
+
+# Grant Cloud Build service account permissions to act as the Cloud Run service account
+resource "google_service_account_iam_member" "cloudbuild_sa_user" {
+  service_account_id = google_service_account.api_service_sa.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
+}
+
+# Grant Cloud Build service account storage admin permissions (for any storage operations)
+resource "google_project_iam_member" "cloudbuild_storage_admin" {
+  project = var.project_id
+  role    = "roles/storage.admin"
+  member  = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
+}
+
+# Grant Cloud Build service account compute admin permissions (for any compute operations)
+resource "google_project_iam_member" "cloudbuild_compute_admin" {
+  project = var.project_id
+  role    = "roles/compute.admin"
+  member  = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
+}
+
+# Grant Cloud Build service account logging admin permissions
+resource "google_project_iam_member" "cloudbuild_logging_admin" {
+  project = var.project_id
+  role    = "roles/logging.admin"
+  member  = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
+}
+
 # Create Cloud Run service
 resource "google_cloud_run_v2_service" "api_service" {
   name     = var.service_name
@@ -103,6 +150,12 @@ resource "google_cloud_run_v2_service" "api_service" {
       env {
         name  = "QDRANT_API_KEY"
         value = var.qdrant_api_key
+      }
+
+      # Hugging Face inference token
+      env {
+        name  = "HF_API_TOKEN"
+        value = var.hf_api_token
       }
       
       resources {

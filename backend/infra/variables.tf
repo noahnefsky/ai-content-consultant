@@ -79,4 +79,11 @@ variable "qdrant_api_key" {
   description = "API key for Qdrant Cloud instance"
   type        = string
   sensitive   = true
+}
+
+# Hugging Face Inference API
+variable "hf_api_token" {
+  description = "Hugging Face API token for hosted inference endpoints"
+  type        = string
+  sensitive   = true
 } 

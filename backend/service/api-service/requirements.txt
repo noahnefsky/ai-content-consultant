@@ -6,18 +6,12 @@ httpx
 google-cloud-firestore
 python-jose[cryptography]
 passlib[bcrypt]
-google-genai==0.3.0
+google-generativeai==0.3.0
 python-dotenv==1.0.0
 langgraph==0.2.0
 
 # Multimodal RAG dependencies
 qdrant-client
-sentence-transformers>=2.0.0
-torch>=2.0.0
-torchvision>=0.15.0
-git+https://github.com/openai/CLIP.git
 cohere
-opencv-python
+opencv-python-headless
 requests
-pillow
-dotenv
